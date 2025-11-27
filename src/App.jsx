@@ -1,7 +1,101 @@
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
-import { Upload, Activity, TrendingUp, Calendar, User, Dumbbell, AlertCircle, FileText, CheckCircle2, Copy, Info, Users, Trophy, Medal, Crown, Flame, BicepsFlexed, GitMerge, MessageSquare, Share, ChevronDown, ChevronUp, XCircle, FileWarning, Database, Check, FileArchive, Pencil } from 'lucide-react';
+import { Upload, Activity, TrendingUp, Calendar, User, Dumbbell, AlertCircle, FileText, CheckCircle2, Copy, Info, Users, Trophy, Medal, Crown, Flame, BicepsFlexed, GitMerge, MessageSquare, Share, ChevronDown, ChevronUp, XCircle, FileWarning, Database, Check, FileArchive, Pencil, Search } from 'lucide-react';
 import JSZip from 'jszip'; // 📦 IMPORTANTE: Esto funcionará en tu PC tras el npm install
+
+// --- COMPONENTE PERSONALIZADO: SELECT CON BÚSQUEDA ---
+const SearchableSelect = ({ options, value, onChange, placeholder = "Seleccionar...", icon: Icon, align = "left" }) => {
+  const [isOpen, setIsOpen] = useState(false);
+  const [searchTerm, setSearchTerm] = useState('');
+  const wrapperRef = useRef(null);
+
+  // Filtrar opciones
+  const filteredOptions = options.filter(opt => 
+    opt.toLowerCase().includes(searchTerm.toLowerCase())
+  );
+
+  // Cerrar al hacer click fuera
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (wrapperRef.current && !wrapperRef.current.contains(event.target)) {
+        setIsOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
+  // Resetear búsqueda al cerrar
+  useEffect(() => {
+    if (!isOpen) setSearchTerm('');
+  }, [isOpen]);
+
+  return (
+    <div className="relative w-full" ref={wrapperRef}>
+      {/* Trigger Button */}
+      <button
+        onClick={() => setIsOpen(!isOpen)}
+        className={`w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-4 text-white flex items-center justify-between hover:border-slate-700 transition-colors group ${align === "center" ? "justify-center" : "justify-between"}`}
+      >
+        <div className={`flex items-center gap-3 overflow-hidden ${align === "center" ? "mx-auto" : ""}`}>
+          {Icon && <Icon size={18} className="text-emerald-500 flex-shrink-0" />}
+          <span className={`truncate ${!value ? 'text-slate-500' : 'font-bold text-lg'}`}>
+            {value || placeholder}
+          </span>
+        </div>
+        <ChevronDown size={16} className={`text-slate-500 transition-transform duration-200 ml-2 ${isOpen ? 'rotate-180' : ''}`} />
+      </button>
+
+      {/* Dropdown Panel */}
+      {isOpen && (
+        <div className="absolute z-50 w-full mt-2 bg-slate-900 border border-slate-700 rounded-xl shadow-2xl overflow-hidden animate-in fade-in zoom-in-95 duration-100 origin-top max-h-60 flex flex-col">
+          {/* Search Input */}
+          <div className="p-2 border-b border-slate-800 sticky top-0 bg-slate-900 z-10">
+            <div className="relative">
+              <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" />
+              <input
+                type="text"
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                placeholder="Buscar..."
+                autoFocus
+                className="w-full bg-slate-950 border border-slate-800 rounded-lg pl-9 pr-3 py-2 text-sm text-white placeholder:text-slate-600 focus:outline-none focus:border-emerald-500/50"
+              />
+            </div>
+          </div>
+          
+          {/* Options List */}
+          <div className="overflow-y-auto custom-scrollbar p-1 flex-1">
+            {filteredOptions.length > 0 ? (
+              filteredOptions.map((opt) => (
+                <button
+                  key={opt}
+                  onClick={() => {
+                    onChange(opt);
+                    setIsOpen(false);
+                  }}
+                  className={`w-full text-left px-3 py-2 rounded-lg text-sm transition-colors flex items-center justify-between ${
+                    value === opt 
+                      ? 'bg-emerald-500/10 text-emerald-400 font-medium' 
+                      : 'text-slate-300 hover:bg-slate-800 hover:text-white'
+                  }`}
+                >
+                  <span className="truncate">{opt}</span>
+                  {value === opt && <Check size={14} />}
+                </button>
+              ))
+            ) : (
+              <div className="p-4 text-center text-xs text-slate-500">
+                No se encontraron resultados
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
+
 
 // Componente principal
 export default function GymTracker() {
@@ -63,16 +157,12 @@ export default function GymTracker() {
       if (headerMatch) {
         currentDate = headerMatch[1]; 
         
-        // Limpiamos el nombre de usuario de caracteres ocultos LTR/RTL
         // eslint-disable-next-line no-control-regex
         let rawUser = headerMatch[3] ? headerMatch[3].trim().replace(/[\u200E\u200F]/g, '') : null;
         
-        // Extraemos el contenido del mensaje para ver si es de sistema
         const fullMatchLength = headerMatch[0].length;
         const content = line.substring(fullMatchLength).trim();
 
-        // Lista de frases de sistema de WhatsApp que queremos ignorar
-        // Esto evita que "ENTRENAMIENTOS" (nombre del grupo) sea detectado como usuario
         const systemPhrases = [
             'mensajes y las llamadas están cifrados',
             'creó el grupo',
@@ -83,17 +173,18 @@ export default function GymTracker() {
             'fijó un mensaje',
             'código de seguridad',
             'salió del grupo',
-            'Los mensajes y las llamadas'
+            'Los mensajes y las llamadas',
+            'cambió el ícono',
+            'Cambiaste el ícono'
         ];
         
-        // Verificamos si el contenido contiene alguna frase de sistema
         const isSystemMessage = systemPhrases.some(phrase => content.includes(phrase));
 
         if (rawUser && !isSystemMessage) {
             if (!users[rawUser]) users[rawUser] = [];
             currentUser = rawUser;
         } else {
-            currentUser = null; // Ignoramos este bloque
+            currentUser = null; 
         }
         
         if (content) line = content; 
@@ -141,50 +232,35 @@ export default function GymTracker() {
   const validateAndSetContent = (text) => {
       // eslint-disable-next-line no-control-regex
       const cleanText = text.replace(/^\uFEFF/, '').replace(/\r\n/g, '\n');
-      
       setInputText(cleanText);
       try {
           const testParse = parseWhatsAppChat(cleanText);
           const detectedUsers = Object.keys(testParse);
-          
           const hasData = detectedUsers.some(u => testParse[u].length > 0);
 
           if (detectedUsers.length === 0 || !hasData) {
               setFileStatus('error');
-              setErrorMessage('El archivo no contiene datos válidos. Asegúrate de usar el formato: Ejercicio 4s x 10r x 20kg');
+              setErrorMessage('El archivo no contiene datos válidos.');
           } else {
               setFileStatus('success');
-              handleAnalyzeForced(cleanText); 
           }
       } catch (err) {
-          console.error(err);
           setFileStatus('error');
-          setErrorMessage('Error al procesar el archivo. Formato desconocido.');
+          setErrorMessage('Error al procesar el archivo.');
       }
       setIsProcessingZip(false);
   };
   
-  const handleAnalyzeForced = (text) => {
-    const data = parseWhatsAppChat(text);
-    setParsedData(data);
+  const handleAnalyze = () => {
+    if (!inputText || fileStatus !== 'success') return;
     
-    const users = Object.keys(data);
-    if (users.length > 0) {
-        const firstUser = users[0];
-        setSelectedUser(firstUser);
-        
-        const allEx = new Set();
-        Object.values(data).forEach(u => u.forEach(e => allEx.add(e.exercise)));
-        const allExArray = [...allEx].sort();
-        
-        if (allExArray.length > 0) {
-             setSelectedExercise(allExArray[0]);
-             setRankingExercise(allExArray[0]);
-             setComparisonExercise(allExArray[0]);
-        }
-    }
+    const data = parseWhatsAppChat(inputText);
+    setParsedData(data);
     setAliases({});
     setSelectedForMerge([]);
+    
+    // La inicialización de selectedUser y selectedExercise se maneja ahora en el useEffect
+    // para asegurar consistencia con el ciclo de vida de React
   };
 
   const handleFileUpload = async (event) => {
@@ -213,9 +289,8 @@ export default function GymTracker() {
                 setIsProcessingZip(false);
             }
         } catch (error) {
-            console.error("Error ZIP:", error);
             setFileStatus('error');
-            setErrorMessage('El archivo ZIP está dañado o no es válido.');
+            setErrorMessage('El archivo ZIP está dañado.');
             setIsProcessingZip(false);
         }
     } else {
@@ -225,11 +300,6 @@ export default function GymTracker() {
         };
         reader.readAsText(file);
     }
-  };
-
-  const handleAnalyze = () => {
-    if (!inputText) return;
-    handleAnalyzeForced(inputText);
   };
 
   // --- MEMOS DE DATOS ---
@@ -254,13 +324,41 @@ export default function GymTracker() {
     return [...exercises].sort();
   }, [processedData]);
 
+  // --- EFECTOS DE AUTO-SELECCIÓN ---
+  
+  // 1. Seleccionar primer usuario automáticamente al cargar datos
+  useEffect(() => {
+    if (availableUsers.length > 0) {
+        // Si no hay usuario seleccionado o el seleccionado no existe, cogemos el primero
+        if (!selectedUser || !availableUsers.includes(selectedUser)) {
+            setSelectedUser(availableUsers[0]);
+        }
+    }
+  }, [availableUsers, selectedUser]);
+
+  // 2. Seleccionar primer ejercicio GLOBAL para Rankings
   useEffect(() => {
       if (allUniqueExercises.length > 0) {
-          if (!selectedExercise) setSelectedExercise(allUniqueExercises[0]);
           if (!rankingExercise) setRankingExercise(allUniqueExercises[0]);
           if (!comparisonExercise) setComparisonExercise(allUniqueExercises[0]);
       }
-  }, [allUniqueExercises, selectedExercise, rankingExercise, comparisonExercise]);
+  }, [allUniqueExercises, rankingExercise, comparisonExercise]);
+
+  // 3. Seleccionar primer ejercicio DEL USUARIO (Fix Gráfica Vacía)
+  useEffect(() => {
+    if (processedData && selectedUser) {
+        const userExercises = [...new Set(processedData[selectedUser].map(d => d.exercise))];
+        // Seleccionamos el primer ejercicio del usuario si:
+        // a) No hay ejercicio seleccionado.
+        // b) El ejercicio seleccionado NO lo ha hecho este usuario.
+        if (userExercises.length > 0) {
+             if (!selectedExercise || !userExercises.includes(selectedExercise)) {
+                 setSelectedExercise(userExercises[0]);
+             }
+        }
+    }
+  }, [selectedUser, processedData]); // Quitamos selectedExercise de dependencias para evitar loops
+
 
   const rankingData = useMemo(() => {
     if (!processedData || !rankingExercise) return [];
@@ -407,7 +505,8 @@ export default function GymTracker() {
             <div className="relative inline-block">
                 <div className="absolute inset-0 bg-emerald-500 blur-2xl opacity-20 rounded-full"></div>
                 <div className="relative bg-slate-900 border border-slate-800 p-4 rounded-2xl shadow-2xl">
-                    <Activity size={56} className="text-emerald-400" />
+                    {/* 1. LOGO CAMBIADO: Dumbbell en vez de Activity */}
+                    <Dumbbell size={56} className="text-emerald-400" />
                 </div>
             </div>
             <h1 className="text-5xl md:text-6xl font-black tracking-tight text-white">
@@ -426,7 +525,8 @@ export default function GymTracker() {
                   {icon: Share, num: 3, title: "Exporta y Sube", text: "En WhatsApp: Info del Grupo > Exportar Chat > Adjuntar Archivos. Sube el ZIP o el TXT."}
               ].map((step, idx) => (
                   <div key={idx} className="bg-slate-900/50 border border-slate-800 p-6 rounded-2xl relative overflow-hidden group hover:border-emerald-500/30 transition-colors">
-                      <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity"><step.icon size={80} /></div>
+                      {/* ICONOS BLANCOS (TEXT-WHITE) y OPACIDAD AJUSTADA */}
+                      <div className="absolute top-0 right-0 p-4 opacity-20 text-white group-hover:opacity-40 transition-opacity"><step.icon size={80} /></div>
                       <div className="relative z-10">
                           <div className="w-10 h-10 bg-emerald-500/10 rounded-full flex items-center justify-center text-emerald-400 font-bold mb-4 border border-emerald-500/20">{step.num}</div>
                           <h3 className="text-white font-bold text-lg mb-2">{step.title}</h3>
@@ -490,9 +590,10 @@ export default function GymTracker() {
               </div>
             <h1 className="text-xl font-bold hidden sm:block tracking-tight">Gym<span className="text-emerald-400">Tracker</span></h1>
           </div>
+          {/* BOTÓN ROJO SUAVE (#E65F57) */}
           <button 
             onClick={() => { setParsedData(null); setInputText(''); setFileName(''); setFileStatus('idle'); setAliases({}); setIsProcessingZip(false); }}
-            className="text-xs font-semibold bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white py-2 px-4 rounded-lg transition-all border border-slate-700 hover:border-slate-600 flex items-center gap-2"
+            className="text-xs font-bold bg-[#E65F57] hover:bg-[#d44b43] text-white py-2 px-4 rounded-lg transition-all shadow-lg shadow-red-900/20 flex items-center gap-2"
           >
             <FileText size={14} />
             Subir otro chat
@@ -555,7 +656,7 @@ export default function GymTracker() {
                                             </td>
                                             {/* CSS TRUNCATE APLICADO AQUI */}
                                             <td className="p-6 font-bold text-slate-200 group-hover:text-white cursor-pointer max-w-[150px] sm:max-w-[300px] truncate" onClick={() => toggleSelection(ex)} title={ex}>
-                                                {ex}
+                                                {truncateText(ex)}
                                             </td>
                                             <td className="p-6 text-center">
                                                 <button 
@@ -585,26 +686,37 @@ export default function GymTracker() {
                     <span className="text-xs uppercase font-bold text-slate-500 tracking-widest flex items-center gap-2">
                         <Users size={12}/> Selecciona Usuario
                     </span>
-                    <div className="flex flex-wrap justify-center gap-2">
-                        {availableUsers.map((user) => (
-                            <button key={user} onClick={() => { setSelectedUser(user); const exercises = [...new Set(processedData[user].map(d => d.exercise))]; if (exercises.length > 0) setSelectedExercise(exercises[0]); else setSelectedExercise(''); }} className={`px-6 py-2 rounded-xl text-sm font-bold transition-all flex items-center gap-2 border ${selectedUser === user ? 'bg-emerald-500 text-slate-950 border-emerald-400 shadow-lg shadow-emerald-900/20' : 'bg-slate-900 text-slate-400 border-slate-800 hover:border-slate-600 hover:text-white'}`}>
-                            <User size={16} strokeWidth={2.5} /> {user}
-                            </button>
-                        ))}
+                    
+                    {/* 1. DROPDOWN DE USUARIO (USANDO SEARCHABLE SELECT AHORA) */}
+                    <div className="relative max-w-xs mx-auto w-full">
+                        <SearchableSelect 
+                            options={availableUsers} 
+                            value={selectedUser} 
+                            onChange={(user) => {
+                                setSelectedUser(user);
+                                const exercises = [...new Set(processedData[user].map(d => d.exercise))];
+                                if (exercises.length > 0) setSelectedExercise(exercises[0]); 
+                                else setSelectedExercise('');
+                            }} 
+                            placeholder="Seleccionar usuario..."
+                            icon={User}
+                            align="center"
+                        />
                     </div>
                 </div>
+
                 <div className="grid lg:grid-cols-3 gap-6">
                     <div className="lg:col-span-1 space-y-6">
                         <div className="bg-slate-900 border border-slate-800 p-6 rounded-3xl shadow-xl">
                             <label className="block text-xs font-bold text-slate-500 mb-3 uppercase tracking-wider">Ejercicio</label>
-                            <div className="relative">
-                                <select value={selectedExercise} onChange={(e) => setSelectedExercise(e.target.value)} className="w-full appearance-none bg-slate-950 border border-slate-800 rounded-xl px-4 py-4 text-white focus:ring-2 focus:ring-emerald-500/50 outline-none font-medium cursor-pointer hover:border-slate-700 transition-colors truncate">
-                                    {/* CSS TRUNCATE APLICADO AQUI INDIRECTAMENTE VIA CLASE TRUNCATE EN SELECT */}
-                                    {uniqueUserExercises.map(ex => (<option key={ex} value={ex}>{ex}</option>))}
-                                    {uniqueUserExercises.length === 0 && <option disabled>Sin ejercicios</option>}
-                                </select>
-                                <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-4 text-emerald-500"><TrendingUp size={18} /></div>
-                            </div>
+                            {/* 2. COMPONENTE SEARCHABLE SELECT */}
+                            <SearchableSelect 
+                                options={uniqueUserExercises} 
+                                value={selectedExercise} 
+                                onChange={setSelectedExercise} 
+                                placeholder="Selecciona o busca..."
+                                icon={TrendingUp}
+                            />
                         </div>
                     </div>
                     <div className="lg:col-span-2">
@@ -657,10 +769,14 @@ export default function GymTracker() {
                     <h2 className="text-2xl font-black text-white flex items-center justify-center gap-3"><Crown className="text-yellow-500 fill-yellow-500" size={32}/> Tabla de Clasificación <Crown className="text-yellow-500 fill-yellow-500" size={32}/></h2>
                     <p className="text-slate-400 text-sm">¿Quién es el más fuerte en...</p>
                     <div className="max-w-xs mx-auto mt-4 relative">
-                        <select value={rankingExercise} onChange={(e) => setRankingExercise(e.target.value)} className="w-full appearance-none bg-slate-900 border-2 border-yellow-500/20 rounded-xl px-4 py-3 text-yellow-500 font-bold focus:ring-2 focus:ring-yellow-500/50 outline-none cursor-pointer hover:border-yellow-500/40 transition-colors text-center truncate">
-                            {allUniqueExercises.map(ex => (<option key={ex} value={ex}>{ex}</option>))}
-                        </select>
-                        <div className="pointer-events-none absolute inset-y-0 right-4 flex items-center text-yellow-500"><BicepsFlexed size={20}/></div>
+                        {/* 2. COMPONENTE SEARCHABLE SELECT (RANKING) */}
+                        <SearchableSelect 
+                                options={allUniqueExercises} 
+                                value={rankingExercise} 
+                                onChange={setRankingExercise} 
+                                placeholder="Selecciona o busca..."
+                                icon={BicepsFlexed}
+                        />
                     </div>
                 </div>
                 <div className="bg-slate-900 border border-slate-800 rounded-3xl overflow-hidden shadow-2xl">
@@ -691,10 +807,14 @@ export default function GymTracker() {
                     <h2 className="text-2xl font-black text-white flex items-center justify-center gap-3"><GitMerge className="text-blue-500" size={32}/> Comparativa de Progreso</h2>
                     <p className="text-slate-400 text-sm">Visualiza todas las líneas de progreso en una sola gráfica.</p>
                     <div className="max-w-xs mx-auto mt-4 relative">
-                        <select value={comparisonExercise} onChange={(e) => setComparisonExercise(e.target.value)} className="w-full appearance-none bg-slate-900 border-2 border-blue-500/20 rounded-xl px-4 py-3 text-blue-400 font-bold focus:ring-2 focus:ring-blue-500/50 outline-none cursor-pointer hover:border-blue-500/40 transition-colors text-center truncate">
-                            {allUniqueExercises.map(ex => (<option key={ex} value={ex}>{ex}</option>))}
-                        </select>
-                        <div className="pointer-events-none absolute inset-y-0 right-4 flex items-center text-blue-500"><Activity size={20}/></div>
+                        {/* 2. COMPONENTE SEARCHABLE SELECT (COMPARATIVA) */}
+                        <SearchableSelect 
+                                options={allUniqueExercises} 
+                                value={comparisonExercise} 
+                                onChange={setComparisonExercise} 
+                                placeholder="Selecciona o busca..."
+                                icon={Activity}
+                        />
                     </div>
                 </div>
                 <div className="bg-slate-900 border border-slate-800 p-6 rounded-3xl shadow-xl relative overflow-hidden">
