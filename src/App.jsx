@@ -1,7 +1,7 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
-import { Upload, Activity, TrendingUp, Calendar, User, Dumbbell, AlertCircle, FileText, CheckCircle2, Copy, Info, Users, Trophy, Medal, Crown, Flame, BicepsFlexed, GitMerge, MessageSquare, Share, ChevronDown, ChevronUp, XCircle, FileWarning, Database, Check, FileArchive } from 'lucide-react';
-import JSZip from 'jszip'; // 📦 IMPORTANTE: Librería para descomprimir
+import { Upload, Activity, TrendingUp, Calendar, User, Dumbbell, AlertCircle, FileText, CheckCircle2, Copy, Info, Users, Trophy, Medal, Crown, Flame, BicepsFlexed, GitMerge, MessageSquare, Share, ChevronDown, ChevronUp, XCircle, FileWarning, Database, Check, FileArchive, Pencil } from 'lucide-react';
+import JSZip from 'jszip'; // 📦 IMPORTANTE: Esto funcionará en tu PC tras el npm install
 
 // Componente principal
 export default function GymTracker() {
@@ -17,17 +17,21 @@ export default function GymTracker() {
 
   // Estados de UI
   const [fileName, setFileName] = useState('');
-  const [fileStatus, setFileStatus] = useState('idle'); // 'idle', 'validating', 'success', 'error'
+  const [fileStatus, setFileStatus] = useState('idle'); 
   const [errorMessage, setErrorMessage] = useState('');
-  const [isProcessingZip, setIsProcessingZip] = useState(false); // Feedback visual carga ZIP
+  const [isProcessingZip, setIsProcessingZip] = useState(false); 
   const [showTemplate, setShowTemplate] = useState(false); 
   const [copySuccess, setCopySuccess] = useState(false);
 
-  // Estados para fusión (Modal)
+  // Estados para gestión de ejercicios (Alias/Fusión/Renombrado)
   const [aliases, setAliases] = useState({}); 
   const [selectedForMerge, setSelectedForMerge] = useState([]); 
   const [showMergeModal, setShowMergeModal] = useState(false); 
   const [mergeNameInput, setMergeNameInput] = useState(''); 
+  
+  // Nuevo: Estado para renombrar
+  const [renamingExercise, setRenamingExercise] = useState(null); // El ejercicio que estamos editando
+  const [renameInput, setRenameInput] = useState(''); // El texto del input de renombrado
 
   const userColors = ['#10b981', '#3b82f6', '#f59e0b', '#ec4899', '#8b5cf6', '#ef4444', '#06b6d4', '#84cc16'];
 
@@ -39,7 +43,6 @@ export default function GymTracker() {
     let currentUser = null;
     let currentDayLabel = null;
     
-    // Regex
     const headerRegex = /^(\d{1,2}\/\d{1,2}\/\d{2,4}),.*- (.*?):/;
     const dayRegex = /### (DÍA \d+) ###/;
     const setRegex = /(\d+)\s*s?\s*x\s*(\d+)\s*r?\s*x\s*([\d\.,]+)/i;
@@ -93,12 +96,9 @@ export default function GymTracker() {
     return users;
   };
 
-  // Función auxiliar para validar contenido tras lectura
   const validateAndSetContent = (text) => {
-      // Limpieza de caracteres invisibles (BOM) que a veces mete WhatsApp
       // eslint-disable-next-line no-control-regex
       const cleanText = text.replace(/^\uFEFF/, '');
-      
       setInputText(cleanText);
       try {
           const testParse = parseWhatsAppChat(cleanText);
@@ -124,20 +124,14 @@ export default function GymTracker() {
     setFileStatus('validating');
     setErrorMessage('');
     
-    // 1. Detección de ZIP
     if (file.name.endsWith('.zip') || file.type === 'application/zip' || file.type === 'application/x-zip-compressed') {
         setIsProcessingZip(true);
         try {
             const zip = new JSZip();
             const loadedZip = await zip.loadAsync(file);
-            
-            // Buscar archivo .txt dentro del ZIP (ignorando carpetas de sistema como __MACOSX)
             const chatFile = Object.values(loadedZip.files).find(f => 
-                f.name.toLowerCase().endsWith('.txt') && 
-                !f.name.startsWith('__MACOSX') && 
-                !f.dir
+                f.name.toLowerCase().endsWith('.txt') && !f.name.startsWith('__MACOSX') && !f.dir
             );
-            
             if (chatFile) {
                 const content = await chatFile.async('string');
                 validateAndSetContent(content);
@@ -153,7 +147,6 @@ export default function GymTracker() {
             setIsProcessingZip(false);
         }
     } else {
-        // 2. Flujo normal TXT
         const reader = new FileReader();
         reader.onload = (e) => {
             validateAndSetContent(e.target.result);
@@ -169,11 +162,25 @@ export default function GymTracker() {
     
     const firstUser = Object.keys(data)[0];
     setSelectedUser(firstUser);
+    
+    // Inicializar selección de ejercicio con datos seguros
+    const firstUserExercises = [...new Set(data[firstUser].map(d => d.exercise))];
+    if (firstUserExercises.length > 0) setSelectedExercise(firstUserExercises[0]);
+
+    // Calcular todos los ejercicios para inicializar rankings
+    const allEx = new Set();
+    Object.values(data).forEach(u => u.forEach(e => allEx.add(e.exercise)));
+    const allExArray = [...allEx].sort();
+    if (allExArray.length > 0) {
+        setRankingExercise(allExArray[0]);
+        setComparisonExercise(allExArray[0]);
+    }
+
     setAliases({});
     setSelectedForMerge([]);
   };
 
-  // --- MEMOS DE DATOS Y NORMALIZACIÓN ---
+  // --- MEMOS DE DATOS ---
   const processedData = useMemo(() => {
       if (!parsedData) return null;
       const normalized = {};
@@ -195,16 +202,15 @@ export default function GymTracker() {
     return [...exercises].sort();
   }, [processedData]);
 
-  // Autoselección inicial
-  useMemo(() => {
-      if (allUniqueExercises.length > 0 && !selectedExercise) {
-          setSelectedExercise(allUniqueExercises[0]);
-          setRankingExercise(allUniqueExercises[0]);
-          setComparisonExercise(allUniqueExercises[0]);
+  // Autoselección inicial (CORREGIDO: Usando useEffect en vez de useMemo para evitar side-effects en render)
+  useEffect(() => {
+      if (allUniqueExercises.length > 0) {
+          if (!selectedExercise) setSelectedExercise(allUniqueExercises[0]);
+          if (!rankingExercise) setRankingExercise(allUniqueExercises[0]);
+          if (!comparisonExercise) setComparisonExercise(allUniqueExercises[0]);
       }
-  }, [allUniqueExercises]);
+  }, [allUniqueExercises, selectedExercise, rankingExercise, comparisonExercise]);
 
-  // Cálculos de Datos
   const rankingData = useMemo(() => {
     if (!processedData || !rankingExercise) return [];
     return Object.keys(processedData).map(user => {
@@ -259,10 +265,25 @@ export default function GymTracker() {
     const startWeight = chartData[0].weight;
     const currentWeight = chartData[chartData.length - 1].weight;
     const improvement = ((currentWeight - startWeight) / startWeight) * 100;
-    return { maxWeight, improvement: improvement.toFixed(1), totalSessions: chartData.length };
+    
+    // --- FORMATO INTELIGENTE (MAX 6 CHARS) ---
+    const formatPercent = (val) => {
+        if (val === 0) return '0%';
+        const absVal = Math.abs(val);
+        const sign = val > 0 ? '+' : '';
+        if (absVal >= 100) return `${sign}${Math.round(val)}%`;
+        return `${sign}${val.toFixed(1)}%`;
+    };
+
+    return { 
+        maxWeight, 
+        improvement: formatPercent(improvement), // Ya formateado string
+        numericImprovement: improvement, // Valor numérico para color
+        totalSessions: chartData.length 
+    };
   }, [chartData]);
 
-  // Funciones UI
+  // UI Helpers
   const templateText = `Titulo día de entreno (Opcional)\n\nNombre Ejercicio\nSeries x Repes x Peso\n\n##   Formatos Válidos   ##\n## para los ejercicios: ##\n\nOpción 1 (Detallada):\n4s x 10r x 20.5kg\n\nOpción 2 (Rápida):\n4x10x20,5\n\n*** Ejemplo ***\n\nDia de brazo\n\nPredicador (barra z de 9kg + 10kg por lado)\n4 x 10 x 29\n\nCurl Biceps con mancuernas de 10kg\n4s x 10r x 20kg`;
   
   const copyTemplate = () => {
@@ -279,7 +300,7 @@ export default function GymTracker() {
     document.body.removeChild(textArea);
   };
 
-  // --- LÓGICA MODAL (Sin prompts) ---
+  // --- LÓGICA DE FUSIÓN (MODAL) ---
   const openMergeModal = () => { if (selectedForMerge.length < 2) return; setMergeNameInput(selectedForMerge[0]); setShowMergeModal(true); };
   
   const performMerge = () => {
@@ -295,7 +316,6 @@ export default function GymTracker() {
       setAliases(newAliases);
       setSelectedForMerge([]);
       setShowMergeModal(false); 
-      // Actualizar selectores
       if (selectedForMerge.includes(selectedExercise)) setSelectedExercise(newName);
       if (selectedForMerge.includes(rankingExercise)) setRankingExercise(newName);
       if (selectedForMerge.includes(comparisonExercise)) setComparisonExercise(newName);
@@ -304,6 +324,31 @@ export default function GymTracker() {
   const toggleSelection = (exerciseName) => {
       if (selectedForMerge.includes(exerciseName)) setSelectedForMerge(selectedForMerge.filter(e => e !== exerciseName));
       else setSelectedForMerge([...selectedForMerge, exerciseName]);
+  };
+
+  // --- LÓGICA DE RENOMBRADO (NUEVO) ---
+  const openRenameModal = (exName) => {
+      setRenamingExercise(exName);
+      setRenameInput(exName);
+  };
+
+  const performRename = () => {
+      if (!renameInput.trim() || !renamingExercise) return;
+      const finalName = renameInput.trim();
+      const newAliases = { ...aliases };
+      const rawNamesToUpdate = new Set();
+      Object.values(parsedData).flat().forEach(entry => {
+          const currentDisplay = aliases[entry.exercise] || entry.exercise;
+          if (currentDisplay === renamingExercise) {
+              rawNamesToUpdate.add(entry.exercise);
+          }
+      });
+      rawNamesToUpdate.forEach(raw => { newAliases[raw] = finalName; });
+      setAliases(newAliases);
+      setRenamingExercise(null);
+      if (selectedExercise === renamingExercise) setSelectedExercise(finalName);
+      if (rankingExercise === renamingExercise) setRankingExercise(finalName);
+      if (comparisonExercise === renamingExercise) setComparisonExercise(finalName);
   };
 
 
@@ -410,7 +455,9 @@ export default function GymTracker() {
       </header>
 
       <main className="max-w-6xl mx-auto p-4 space-y-6 mt-4 relative">
-        <div className="flex justify-center mb-6 overflow-x-auto no-scrollbar">
+        
+        {/* TAB NAVIGATION - CORREGIDO SCROLL */}
+        <div className="flex justify-start md:justify-center mb-6 overflow-x-auto no-scrollbar">
             <div className="bg-slate-900 p-1 rounded-xl border border-slate-800 inline-flex min-w-fit">
                 {['progress', 'ranking', 'comparison', 'exercises'].map(tab => (
                     <button key={tab} onClick={() => setActiveTab(tab)} className={`px-4 sm:px-6 py-2 rounded-lg text-sm font-bold transition-all flex items-center gap-2 capitalize ${activeTab === tab ? (tab==='ranking'?'bg-yellow-500 text-slate-950':tab==='comparison'?'bg-blue-500 text-slate-950':tab==='exercises'?'bg-purple-500 text-slate-950':'bg-emerald-500 text-slate-950') + ' shadow-lg' : 'text-slate-400 hover:text-white'}`}>
@@ -429,7 +476,7 @@ export default function GymTracker() {
             <div className="animate-in fade-in slide-in-from-right-4 duration-500 space-y-6">
                 <div className="text-center space-y-2 mb-8">
                     <h2 className="text-2xl font-black text-white flex items-center justify-center gap-3"><Database className="text-purple-500" size={32}/> Gestión de Ejercicios</h2>
-                    <p className="text-slate-400 text-sm">Fusiona nombres duplicados.</p>
+                    <p className="text-slate-400 text-sm">Gestiona nombres de ejercicios (fusionar o renombrar).</p>
                 </div>
                 {selectedForMerge.length > 1 && (
                     <div className="sticky top-20 z-30 flex justify-center mb-6 animate-in slide-in-from-top-4">
@@ -441,16 +488,38 @@ export default function GymTracker() {
                 <div className="bg-slate-900 border border-slate-800 rounded-3xl overflow-hidden shadow-2xl">
                     <div className="overflow-x-auto">
                         <table className="w-full text-left min-w-[600px]">
-                            <thead className="bg-slate-950 text-slate-500 uppercase text-xs tracking-wider font-bold"><tr><th className="p-4 w-12 text-center"><CheckCircle2 size={16}/></th><th className="p-6">Nombre del Ejercicio</th><th className="p-6 text-right">Registros</th></tr></thead>
+                            <thead className="bg-slate-950 text-slate-500 uppercase text-xs tracking-wider font-bold">
+                                <tr>
+                                    <th className="p-4 w-12 text-center"><CheckCircle2 size={16}/></th>
+                                    <th className="p-6">Nombre del Ejercicio</th>
+                                    <th className="p-6 text-center">Acciones</th>
+                                    <th className="p-6 text-right">Registros</th>
+                                </tr>
+                            </thead>
                             <tbody className="divide-y divide-slate-800/50 text-sm">
                                 {allUniqueExercises.map((ex) => {
                                     const count = Object.values(processedData).flat().filter(e => e.exercise === ex).length;
                                     const isSelected = selectedForMerge.includes(ex);
                                     return (
-                                        <tr key={ex} onClick={() => toggleSelection(ex)} className={`cursor-pointer transition-colors group ${isSelected ? 'bg-purple-500/10' : 'hover:bg-slate-800/30'}`}>
-                                            <td className="p-4 text-center"><div className={`w-5 h-5 rounded border mx-auto flex items-center justify-center transition-all ${isSelected ? 'bg-purple-500 border-purple-500' : 'border-slate-600 group-hover:border-purple-400'}`}>{isSelected && <Check size={14} className="text-white"/>}</div></td>
-                                            <td className="p-6 font-bold text-slate-200 group-hover:text-white">{ex}</td>
-                                            <td className="p-6 text-right"><span className="inline-block px-3 py-1 bg-slate-800 rounded-full text-slate-400 text-xs font-mono whitespace-nowrap">{count} sets</span></td>
+                                        <tr key={ex} className={`transition-colors group ${isSelected ? 'bg-purple-500/10' : 'hover:bg-slate-800/30'}`}>
+                                            <td className="p-4 text-center cursor-pointer" onClick={() => toggleSelection(ex)}>
+                                                <div className={`w-5 h-5 rounded border mx-auto flex items-center justify-center transition-all ${isSelected ? 'bg-purple-500 border-purple-500' : 'border-slate-600 group-hover:border-purple-400'}`}>
+                                                    {isSelected && <Check size={14} className="text-white"/>}
+                                                </div>
+                                            </td>
+                                            <td className="p-6 font-bold text-slate-200 group-hover:text-white cursor-pointer" onClick={() => toggleSelection(ex)}>{ex}</td>
+                                            <td className="p-6 text-center">
+                                                <button 
+                                                    onClick={(e) => { e.stopPropagation(); openRenameModal(ex); }}
+                                                    className="p-2 hover:bg-slate-700 rounded-lg text-slate-500 hover:text-white transition-colors"
+                                                    title="Renombrar"
+                                                >
+                                                    <Pencil size={16} />
+                                                </button>
+                                            </td>
+                                            <td className="p-6 text-right cursor-pointer" onClick={() => toggleSelection(ex)}>
+                                                <span className="inline-block px-3 py-1 bg-slate-800 rounded-full text-slate-400 text-xs font-mono whitespace-nowrap">{count} sets</span>
+                                            </td>
                                         </tr>
                                     );
                                 })}
@@ -496,9 +565,9 @@ export default function GymTracker() {
                                 <div className="text-xl sm:text-3xl font-black text-white mt-1 truncate">{stats ? stats.maxWeight : '-'}<span className="text-sm sm:text-lg text-slate-500 font-medium ml-1">kg</span></div>
                             </div>
                             <div className="bg-slate-900/80 p-3 sm:p-5 rounded-3xl border border-slate-800 flex flex-col justify-between">
-                                <div className="bg-slate-800 w-8 h-8 sm:w-10 sm:h-10 rounded-full flex items-center justify-center mb-2"><TrendingUp size={18} className={Number(stats?.improvement) >= 0 ? 'text-green-400' : 'text-red-400'}/></div>
+                                <div className="bg-slate-800 w-8 h-8 sm:w-10 sm:h-10 rounded-full flex items-center justify-center mb-2"><TrendingUp size={18} className={Number(stats.numericImprovement) >= 0 ? 'text-green-400' : 'text-red-400'}/></div>
                                 <div className="min-h-[2.5rem] flex items-center"><span className="text-[10px] sm:text-xs font-bold text-slate-500 uppercase tracking-wider leading-tight">Progreso</span></div>
-                                <div className={`text-xl sm:text-3xl font-black mt-1 truncate ${Number(stats?.improvement) >= 0 ? 'text-green-400' : 'text-red-400'}`}>{stats ? `${Number(stats.improvement) > 0 ? '+' : ''}${stats.improvement}%` : '-'}</div>
+                                <div className={`text-xl sm:text-3xl font-black mt-1 truncate ${Number(stats.numericImprovement) >= 0 ? 'text-green-400' : 'text-red-400'}`}>{stats ? stats.improvement : '-'}</div>
                             </div>
                             <div className="bg-slate-900/80 p-3 sm:p-5 rounded-3xl border border-slate-800 flex flex-col justify-between">
                                 <div className="bg-slate-800 w-8 h-8 sm:w-10 sm:h-10 rounded-full flex items-center justify-center mb-2"><Calendar size={18} className="text-blue-400"/></div>
@@ -518,6 +587,7 @@ export default function GymTracker() {
                           <XAxis dataKey="date" stroke="#64748b" fontSize={12} tickMargin={15} axisLine={false} tickLine={false}/>
                           <YAxis stroke="#64748b" fontSize={12} domain={['dataMin - 5', 'dataMax + 5']} axisLine={false} tickLine={false} tickFormatter={(value) => `${value}kg`}/>
                           <Tooltip contentStyle={{ backgroundColor: '#0f172a', borderColor: '#334155', color: '#f8fafc', borderRadius: '12px', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.5)' }} itemStyle={{ color: '#34d399', fontWeight: 'bold' }} labelStyle={{ color: '#94a3b8', marginBottom: '0.5rem' }}/>
+                          {/* FIX 5: Ocultar puntos si hay demasiados datos */}
                           <Line type="monotone" dataKey="weight" name="Peso Máx" stroke="#10b981" strokeWidth={4} dot={chartData.length < 30 ? { r: 4, fill: '#0f172a', stroke: '#10b981', strokeWidth: 2 } : false} activeDot={{ r: 8, fill: '#10b981' }} />
                         </LineChart>
                       </ResponsiveContainer>
@@ -586,6 +656,7 @@ export default function GymTracker() {
                           <YAxis stroke="#64748b" fontSize={12} domain={['dataMin - 5', 'dataMax + 5']} axisLine={false} tickLine={false} tickFormatter={(value) => `${value}kg`}/>
                           <Tooltip contentStyle={{ backgroundColor: '#0f172a', borderColor: '#334155', color: '#f8fafc', borderRadius: '12px', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.5)' }} labelStyle={{ color: '#94a3b8', marginBottom: '0.5rem' }}/>
                           <Legend wrapperStyle={{ paddingTop: '20px' }}/>
+                          {/* FIX 5: Ocultar puntos en comparativa si hay muchos */}
                           {availableUsers.map((user, idx) => (<Line key={user} type="monotone" dataKey={user} name={user} stroke={userColors[idx % userColors.length]} strokeWidth={3} connectNulls={true} dot={comparisonChartData.length < 30 ? { r: 4, fill: '#0f172a', stroke: userColors[idx % userColors.length], strokeWidth: 2 } : false} activeDot={{ r: 6 }} />))}
                         </LineChart>
                       </ResponsiveContainer>
@@ -607,6 +678,22 @@ export default function GymTracker() {
                     <div className="flex gap-3">
                         <button onClick={() => setShowMergeModal(false)} className="flex-1 py-3 rounded-xl font-bold text-slate-400 hover:bg-slate-800 transition-colors">Cancelar</button>
                         <button onClick={performMerge} className="flex-1 py-3 rounded-xl font-bold bg-purple-600 hover:bg-purple-500 text-white shadow-lg shadow-purple-900/20 transition-colors">Confirmar Fusión</button>
+                    </div>
+                </div>
+            </div>
+        )}
+
+        {/* MODAL DE RENOMBRAR (NUEVO) */}
+        {renamingExercise && (
+            <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-4">
+                <div className="bg-slate-900 border border-slate-700 p-6 rounded-2xl w-full max-w-md shadow-2xl relative animate-in zoom-in-95 duration-200">
+                    <button onClick={() => setRenamingExercise(null)} className="absolute top-4 right-4 text-slate-500 hover:text-white"><XCircle size={24} /></button>
+                    <div className="flex items-center gap-3 mb-4 text-blue-400"><Pencil size={32} /><h3 className="text-xl font-bold text-white">Renombrar Ejercicio</h3></div>
+                    <label className="block text-xs font-bold text-slate-500 uppercase mb-2">Nuevo nombre</label>
+                    <input type="text" value={renameInput} onChange={(e) => setRenameInput(e.target.value)} className="w-full bg-slate-950 border border-slate-700 rounded-xl px-4 py-3 text-white focus:ring-2 focus:ring-blue-500 outline-none mb-6" autoFocus />
+                    <div className="flex gap-3">
+                        <button onClick={() => setRenamingExercise(null)} className="flex-1 py-3 rounded-xl font-bold text-slate-400 hover:bg-slate-800 transition-colors">Cancelar</button>
+                        <button onClick={performRename} className="flex-1 py-3 rounded-xl font-bold bg-blue-600 hover:bg-blue-500 text-white shadow-lg shadow-blue-900/20 transition-colors">Guardar</button>
                     </div>
                 </div>
             </div>
