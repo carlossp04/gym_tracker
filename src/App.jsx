@@ -30,10 +30,17 @@ export default function GymTracker() {
   const [mergeNameInput, setMergeNameInput] = useState(''); 
   
   // Nuevo: Estado para renombrar
-  const [renamingExercise, setRenamingExercise] = useState(null); // El ejercicio que estamos editando
-  const [renameInput, setRenameInput] = useState(''); // El texto del input de renombrado
+  const [renamingExercise, setRenamingExercise] = useState(null); 
+  const [renameInput, setRenameInput] = useState(''); 
 
   const userColors = ['#10b981', '#3b82f6', '#f59e0b', '#ec4899', '#8b5cf6', '#ef4444', '#06b6d4', '#84cc16'];
+
+  // Helper para truncar texto largo (Visualización limpia)
+  const truncateText = (text, maxLength = 25) => {
+    if (!text) return '';
+    if (text.length <= maxLength) return text;
+    return text.substring(0, maxLength) + '...';
+  };
 
   // --- LÓGICA DE PARSEO ---
   const parseWhatsAppChat = (text) => {
@@ -202,7 +209,7 @@ export default function GymTracker() {
     return [...exercises].sort();
   }, [processedData]);
 
-  // Autoselección inicial (CORREGIDO: Usando useEffect en vez de useMemo para evitar side-effects en render)
+  // Autoselección inicial 
   useEffect(() => {
       if (allUniqueExercises.length > 0) {
           if (!selectedExercise) setSelectedExercise(allUniqueExercises[0]);
@@ -266,7 +273,7 @@ export default function GymTracker() {
     const currentWeight = chartData[chartData.length - 1].weight;
     const improvement = ((currentWeight - startWeight) / startWeight) * 100;
     
-    // --- FORMATO INTELIGENTE (MAX 6 CHARS) ---
+    // Formato inteligente
     const formatPercent = (val) => {
         if (val === 0) return '0%';
         const absVal = Math.abs(val);
@@ -277,8 +284,8 @@ export default function GymTracker() {
 
     return { 
         maxWeight, 
-        improvement: formatPercent(improvement), // Ya formateado string
-        numericImprovement: improvement, // Valor numérico para color
+        improvement: formatPercent(improvement),
+        numericImprovement: improvement,
         totalSessions: chartData.length 
     };
   }, [chartData]);
@@ -456,7 +463,7 @@ export default function GymTracker() {
 
       <main className="max-w-6xl mx-auto p-4 space-y-6 mt-4 relative">
         
-        {/* TAB NAVIGATION - CORREGIDO SCROLL */}
+        {/* TAB NAVIGATION */}
         <div className="flex justify-start md:justify-center mb-6 overflow-x-auto no-scrollbar">
             <div className="bg-slate-900 p-1 rounded-xl border border-slate-800 inline-flex min-w-fit">
                 {['progress', 'ranking', 'comparison', 'exercises'].map(tab => (
@@ -507,7 +514,10 @@ export default function GymTracker() {
                                                     {isSelected && <Check size={14} className="text-white"/>}
                                                 </div>
                                             </td>
-                                            <td className="p-6 font-bold text-slate-200 group-hover:text-white cursor-pointer" onClick={() => toggleSelection(ex)}>{ex}</td>
+                                            {/* NOMBRE TRUNCADO SOLO SI ES NECESARIO */}
+                                            <td className="p-6 font-bold text-slate-200 group-hover:text-white cursor-pointer" onClick={() => toggleSelection(ex)} title={ex}>
+                                                {truncateText(ex)}
+                                            </td>
                                             <td className="p-6 text-center">
                                                 <button 
                                                     onClick={(e) => { e.stopPropagation(); openRenameModal(ex); }}
@@ -550,7 +560,7 @@ export default function GymTracker() {
                             <label className="block text-xs font-bold text-slate-500 mb-3 uppercase tracking-wider">Ejercicio</label>
                             <div className="relative">
                                 <select value={selectedExercise} onChange={(e) => setSelectedExercise(e.target.value)} className="w-full appearance-none bg-slate-950 border border-slate-800 rounded-xl px-4 py-4 text-white focus:ring-2 focus:ring-emerald-500/50 outline-none font-medium cursor-pointer hover:border-slate-700 transition-colors">
-                                    {uniqueUserExercises.map(ex => (<option key={ex} value={ex}>{ex}</option>))}
+                                    {uniqueUserExercises.map(ex => (<option key={ex} value={ex}>{truncateText(ex)}</option>))}
                                     {uniqueUserExercises.length === 0 && <option disabled>Sin ejercicios</option>}
                                 </select>
                                 <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-4 text-emerald-500"><TrendingUp size={18} /></div>
@@ -606,7 +616,7 @@ export default function GymTracker() {
                     <p className="text-slate-400 text-sm">¿Quién es el más fuerte en...</p>
                     <div className="max-w-xs mx-auto mt-4 relative">
                         <select value={rankingExercise} onChange={(e) => setRankingExercise(e.target.value)} className="w-full appearance-none bg-slate-900 border-2 border-yellow-500/20 rounded-xl px-4 py-3 text-yellow-500 font-bold focus:ring-2 focus:ring-yellow-500/50 outline-none cursor-pointer hover:border-yellow-500/40 transition-colors text-center">
-                            {allUniqueExercises.map(ex => (<option key={ex} value={ex}>{ex}</option>))}
+                            {allUniqueExercises.map(ex => (<option key={ex} value={ex}>{truncateText(ex)}</option>))}
                         </select>
                         <div className="pointer-events-none absolute inset-y-0 right-4 flex items-center text-yellow-500"><BicepsFlexed size={20}/></div>
                     </div>
@@ -640,7 +650,7 @@ export default function GymTracker() {
                     <p className="text-slate-400 text-sm">Visualiza todas las líneas de progreso en una sola gráfica.</p>
                     <div className="max-w-xs mx-auto mt-4 relative">
                         <select value={comparisonExercise} onChange={(e) => setComparisonExercise(e.target.value)} className="w-full appearance-none bg-slate-900 border-2 border-blue-500/20 rounded-xl px-4 py-3 text-blue-400 font-bold focus:ring-2 focus:ring-blue-500/50 outline-none cursor-pointer hover:border-blue-500/40 transition-colors text-center">
-                            {allUniqueExercises.map(ex => (<option key={ex} value={ex}>{ex}</option>))}
+                            {allUniqueExercises.map(ex => (<option key={ex} value={ex}>{truncateText(ex)}</option>))}
                         </select>
                         <div className="pointer-events-none absolute inset-y-0 right-4 flex items-center text-blue-500"><Activity size={20}/></div>
                     </div>
