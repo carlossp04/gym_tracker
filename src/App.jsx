@@ -23,26 +23,23 @@ export default function GymTracker() {
   const [showTemplate, setShowTemplate] = useState(false); 
   const [copySuccess, setCopySuccess] = useState(false);
 
-  // Estados para gestión de ejercicios (Alias/Fusión/Renombrado)
+  // Estados para gestión de ejercicios
   const [aliases, setAliases] = useState({}); 
   const [selectedForMerge, setSelectedForMerge] = useState([]); 
   const [showMergeModal, setShowMergeModal] = useState(false); 
   const [mergeNameInput, setMergeNameInput] = useState(''); 
-  
-  // Nuevo: Estado para renombrar
   const [renamingExercise, setRenamingExercise] = useState(null); 
   const [renameInput, setRenameInput] = useState(''); 
 
   const userColors = ['#10b981', '#3b82f6', '#f59e0b', '#ec4899', '#8b5cf6', '#ef4444', '#06b6d4', '#84cc16'];
 
-  // Helper para truncar texto largo (Visualización limpia)
+  // --- LÓGICA DE PARSEO ---
   const truncateText = (text, maxLength = 25) => {
     if (!text) return '';
     if (text.length <= maxLength) return text;
     return text.substring(0, maxLength) + '...';
   };
 
-  // --- LÓGICA DE PARSEO ---
   const parseWhatsAppChat = (text) => {
     const lines = text.split('\n');
     const users = {}; 
@@ -50,7 +47,9 @@ export default function GymTracker() {
     let currentUser = null;
     let currentDayLabel = null;
     
-    const headerRegex = /^(\d{1,2}\/\d{1,2}\/\d{2,4}),.*- (.*?):/;
+    // REGEX UNIVERSAL MEJORADO (iOS y Android)
+    const headerRegex = /^\[?(\d{1,2}[\/\.-]\d{1,2}[\/\.-]\d{2,4}),?\s*(\d{1,2}:\d{2}(?::\d{2})?)?.*?[\]-]\s*(.*?):/;
+    
     const dayRegex = /### (DÍA \d+) ###/;
     const setRegex = /(\d+)\s*s?\s*x\s*(\d+)\s*r?\s*x\s*([\d\.,]+)/i;
 
@@ -62,12 +61,43 @@ export default function GymTracker() {
 
       const headerMatch = line.match(headerRegex);
       if (headerMatch) {
-        currentDate = headerMatch[1];
-        const rawUser = headerMatch[2].trim(); 
-        if (!users[rawUser]) users[rawUser] = [];
-        currentUser = rawUser;
-        const contentAfterHeader = line.split(':').slice(2).join(':').trim();
-        if (contentAfterHeader) line = contentAfterHeader; 
+        currentDate = headerMatch[1]; 
+        
+        // Limpiamos el nombre de usuario de caracteres ocultos LTR/RTL
+        // eslint-disable-next-line no-control-regex
+        let rawUser = headerMatch[3] ? headerMatch[3].trim().replace(/[\u200E\u200F]/g, '') : null;
+        
+        // Extraemos el contenido del mensaje para ver si es de sistema
+        const fullMatchLength = headerMatch[0].length;
+        const content = line.substring(fullMatchLength).trim();
+
+        // Lista de frases de sistema de WhatsApp que queremos ignorar
+        // Esto evita que "ENTRENAMIENTOS" (nombre del grupo) sea detectado como usuario
+        const systemPhrases = [
+            'mensajes y las llamadas están cifrados',
+            'creó el grupo',
+            'te añadió',
+            'añadió a',
+            'cambió la imagen',
+            'eliminó este mensaje',
+            'fijó un mensaje',
+            'código de seguridad',
+            'salió del grupo',
+            'Los mensajes y las llamadas'
+        ];
+        
+        // Verificamos si el contenido contiene alguna frase de sistema
+        const isSystemMessage = systemPhrases.some(phrase => content.includes(phrase));
+
+        if (rawUser && !isSystemMessage) {
+            if (!users[rawUser]) users[rawUser] = [];
+            currentUser = rawUser;
+        } else {
+            currentUser = null; // Ignoramos este bloque
+        }
+        
+        if (content) line = content; 
+        else return; 
       }
 
       if (!currentUser || !currentDate) return;
@@ -95,8 +125,13 @@ export default function GymTracker() {
           });
         }
       } else {
-        if (line.length > 2 && !line.includes('###') && !line.includes('http') && !line.match(/^\d/) && !line.includes('omitted')) {
-            lastExerciseName = line.replace(/🟢|🔴|🔵|🟠/g, '').trim();
+        const isSystemMessage = line.includes('omitido') || line.includes('imagen de este grupo') || line.includes('eliminó este mensaje') || line.includes('cifrados de extremo') || line.includes('<Multimedia omitido>');
+        const isUrl = line.includes('http');
+        const isShortGarbage = line.length < 3;
+        
+        if (!isShortGarbage && !line.includes('###') && !isUrl && !line.match(/^\d/) && !isSystemMessage) {
+            // eslint-disable-next-line no-control-regex
+            lastExerciseName = line.replace(/🟢|🔴|🔵|🟠|\u200E|\u200F/g, '').trim();
         }
       }
     });
@@ -105,22 +140,51 @@ export default function GymTracker() {
 
   const validateAndSetContent = (text) => {
       // eslint-disable-next-line no-control-regex
-      const cleanText = text.replace(/^\uFEFF/, '');
+      const cleanText = text.replace(/^\uFEFF/, '').replace(/\r\n/g, '\n');
+      
       setInputText(cleanText);
       try {
           const testParse = parseWhatsAppChat(cleanText);
           const detectedUsers = Object.keys(testParse);
-          if (detectedUsers.length === 0) {
+          
+          const hasData = detectedUsers.some(u => testParse[u].length > 0);
+
+          if (detectedUsers.length === 0 || !hasData) {
               setFileStatus('error');
-              setErrorMessage('El archivo no contiene datos con el formato válido (S x R x Kg).');
+              setErrorMessage('El archivo no contiene datos válidos. Asegúrate de usar el formato: Ejercicio 4s x 10r x 20kg');
           } else {
               setFileStatus('success');
+              handleAnalyzeForced(cleanText); 
           }
       } catch (err) {
+          console.error(err);
           setFileStatus('error');
-          setErrorMessage('Error al procesar el texto del chat.');
+          setErrorMessage('Error al procesar el archivo. Formato desconocido.');
       }
       setIsProcessingZip(false);
+  };
+  
+  const handleAnalyzeForced = (text) => {
+    const data = parseWhatsAppChat(text);
+    setParsedData(data);
+    
+    const users = Object.keys(data);
+    if (users.length > 0) {
+        const firstUser = users[0];
+        setSelectedUser(firstUser);
+        
+        const allEx = new Set();
+        Object.values(data).forEach(u => u.forEach(e => allEx.add(e.exercise)));
+        const allExArray = [...allEx].sort();
+        
+        if (allExArray.length > 0) {
+             setSelectedExercise(allExArray[0]);
+             setRankingExercise(allExArray[0]);
+             setComparisonExercise(allExArray[0]);
+        }
+    }
+    setAliases({});
+    setSelectedForMerge([]);
   };
 
   const handleFileUpload = async (event) => {
@@ -139,6 +203,7 @@ export default function GymTracker() {
             const chatFile = Object.values(loadedZip.files).find(f => 
                 f.name.toLowerCase().endsWith('.txt') && !f.name.startsWith('__MACOSX') && !f.dir
             );
+            
             if (chatFile) {
                 const content = await chatFile.async('string');
                 validateAndSetContent(content);
@@ -150,7 +215,7 @@ export default function GymTracker() {
         } catch (error) {
             console.error("Error ZIP:", error);
             setFileStatus('error');
-            setErrorMessage('El archivo ZIP está corrupto o no se puede leer.');
+            setErrorMessage('El archivo ZIP está dañado o no es válido.');
             setIsProcessingZip(false);
         }
     } else {
@@ -163,28 +228,8 @@ export default function GymTracker() {
   };
 
   const handleAnalyze = () => {
-    if (!inputText || fileStatus !== 'success') return;
-    const data = parseWhatsAppChat(inputText);
-    setParsedData(data);
-    
-    const firstUser = Object.keys(data)[0];
-    setSelectedUser(firstUser);
-    
-    // Inicializar selección de ejercicio con datos seguros
-    const firstUserExercises = [...new Set(data[firstUser].map(d => d.exercise))];
-    if (firstUserExercises.length > 0) setSelectedExercise(firstUserExercises[0]);
-
-    // Calcular todos los ejercicios para inicializar rankings
-    const allEx = new Set();
-    Object.values(data).forEach(u => u.forEach(e => allEx.add(e.exercise)));
-    const allExArray = [...allEx].sort();
-    if (allExArray.length > 0) {
-        setRankingExercise(allExArray[0]);
-        setComparisonExercise(allExArray[0]);
-    }
-
-    setAliases({});
-    setSelectedForMerge([]);
+    if (!inputText) return;
+    handleAnalyzeForced(inputText);
   };
 
   // --- MEMOS DE DATOS ---
@@ -209,7 +254,6 @@ export default function GymTracker() {
     return [...exercises].sort();
   }, [processedData]);
 
-  // Autoselección inicial 
   useEffect(() => {
       if (allUniqueExercises.length > 0) {
           if (!selectedExercise) setSelectedExercise(allUniqueExercises[0]);
@@ -273,7 +317,6 @@ export default function GymTracker() {
     const currentWeight = chartData[chartData.length - 1].weight;
     const improvement = ((currentWeight - startWeight) / startWeight) * 100;
     
-    // Formato inteligente
     const formatPercent = (val) => {
         if (val === 0) return '0%';
         const absVal = Math.abs(val);
@@ -307,7 +350,7 @@ export default function GymTracker() {
     document.body.removeChild(textArea);
   };
 
-  // --- LÓGICA DE FUSIÓN (MODAL) ---
+  // --- LÓGICA MODALES ---
   const openMergeModal = () => { if (selectedForMerge.length < 2) return; setMergeNameInput(selectedForMerge[0]); setShowMergeModal(true); };
   
   const performMerge = () => {
@@ -333,11 +376,7 @@ export default function GymTracker() {
       else setSelectedForMerge([...selectedForMerge, exerciseName]);
   };
 
-  // --- LÓGICA DE RENOMBRADO (NUEVO) ---
-  const openRenameModal = (exName) => {
-      setRenamingExercise(exName);
-      setRenameInput(exName);
-  };
+  const openRenameModal = (exName) => { setRenamingExercise(exName); setRenameInput(exName); };
 
   const performRename = () => {
       if (!renameInput.trim() || !renamingExercise) return;
@@ -463,7 +502,7 @@ export default function GymTracker() {
 
       <main className="max-w-6xl mx-auto p-4 space-y-6 mt-4 relative">
         
-        {/* TAB NAVIGATION */}
+        {/* TAB NAVIGATION - SCROLL */}
         <div className="flex justify-start md:justify-center mb-6 overflow-x-auto no-scrollbar">
             <div className="bg-slate-900 p-1 rounded-xl border border-slate-800 inline-flex min-w-fit">
                 {['progress', 'ranking', 'comparison', 'exercises'].map(tab => (
@@ -514,9 +553,9 @@ export default function GymTracker() {
                                                     {isSelected && <Check size={14} className="text-white"/>}
                                                 </div>
                                             </td>
-                                            {/* NOMBRE TRUNCADO SOLO SI ES NECESARIO */}
-                                            <td className="p-6 font-bold text-slate-200 group-hover:text-white cursor-pointer" onClick={() => toggleSelection(ex)} title={ex}>
-                                                {truncateText(ex)}
+                                            {/* CSS TRUNCATE APLICADO AQUI */}
+                                            <td className="p-6 font-bold text-slate-200 group-hover:text-white cursor-pointer max-w-[150px] sm:max-w-[300px] truncate" onClick={() => toggleSelection(ex)} title={ex}>
+                                                {ex}
                                             </td>
                                             <td className="p-6 text-center">
                                                 <button 
@@ -559,8 +598,9 @@ export default function GymTracker() {
                         <div className="bg-slate-900 border border-slate-800 p-6 rounded-3xl shadow-xl">
                             <label className="block text-xs font-bold text-slate-500 mb-3 uppercase tracking-wider">Ejercicio</label>
                             <div className="relative">
-                                <select value={selectedExercise} onChange={(e) => setSelectedExercise(e.target.value)} className="w-full appearance-none bg-slate-950 border border-slate-800 rounded-xl px-4 py-4 text-white focus:ring-2 focus:ring-emerald-500/50 outline-none font-medium cursor-pointer hover:border-slate-700 transition-colors">
-                                    {uniqueUserExercises.map(ex => (<option key={ex} value={ex}>{truncateText(ex)}</option>))}
+                                <select value={selectedExercise} onChange={(e) => setSelectedExercise(e.target.value)} className="w-full appearance-none bg-slate-950 border border-slate-800 rounded-xl px-4 py-4 text-white focus:ring-2 focus:ring-emerald-500/50 outline-none font-medium cursor-pointer hover:border-slate-700 transition-colors truncate">
+                                    {/* CSS TRUNCATE APLICADO AQUI INDIRECTAMENTE VIA CLASE TRUNCATE EN SELECT */}
+                                    {uniqueUserExercises.map(ex => (<option key={ex} value={ex}>{ex}</option>))}
                                     {uniqueUserExercises.length === 0 && <option disabled>Sin ejercicios</option>}
                                 </select>
                                 <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-4 text-emerald-500"><TrendingUp size={18} /></div>
@@ -575,9 +615,11 @@ export default function GymTracker() {
                                 <div className="text-xl sm:text-3xl font-black text-white mt-1 truncate">{stats ? stats.maxWeight : '-'}<span className="text-sm sm:text-lg text-slate-500 font-medium ml-1">kg</span></div>
                             </div>
                             <div className="bg-slate-900/80 p-3 sm:p-5 rounded-3xl border border-slate-800 flex flex-col justify-between">
-                                <div className="bg-slate-800 w-8 h-8 sm:w-10 sm:h-10 rounded-full flex items-center justify-center mb-2"><TrendingUp size={18} className={Number(stats.numericImprovement) >= 0 ? 'text-green-400' : 'text-red-400'}/></div>
+                                <div className="bg-slate-800 w-8 h-8 sm:w-10 sm:h-10 rounded-full flex items-center justify-center mb-2"><TrendingUp size={18} className={stats && Number(stats.numericImprovement) >= 0 ? 'text-green-400' : 'text-red-400'}/></div>
                                 <div className="min-h-[2.5rem] flex items-center"><span className="text-[10px] sm:text-xs font-bold text-slate-500 uppercase tracking-wider leading-tight">Progreso</span></div>
-                                <div className={`text-xl sm:text-3xl font-black mt-1 truncate ${Number(stats.numericImprovement) >= 0 ? 'text-green-400' : 'text-red-400'}`}>{stats ? stats.improvement : '-'}</div>
+                                <div className={`text-xl sm:text-3xl font-black mt-1 truncate ${stats && Number(stats.numericImprovement) >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                                    {stats ? stats.improvement : '-'}
+                                </div>
                             </div>
                             <div className="bg-slate-900/80 p-3 sm:p-5 rounded-3xl border border-slate-800 flex flex-col justify-between">
                                 <div className="bg-slate-800 w-8 h-8 sm:w-10 sm:h-10 rounded-full flex items-center justify-center mb-2"><Calendar size={18} className="text-blue-400"/></div>
@@ -615,8 +657,8 @@ export default function GymTracker() {
                     <h2 className="text-2xl font-black text-white flex items-center justify-center gap-3"><Crown className="text-yellow-500 fill-yellow-500" size={32}/> Tabla de Clasificación <Crown className="text-yellow-500 fill-yellow-500" size={32}/></h2>
                     <p className="text-slate-400 text-sm">¿Quién es el más fuerte en...</p>
                     <div className="max-w-xs mx-auto mt-4 relative">
-                        <select value={rankingExercise} onChange={(e) => setRankingExercise(e.target.value)} className="w-full appearance-none bg-slate-900 border-2 border-yellow-500/20 rounded-xl px-4 py-3 text-yellow-500 font-bold focus:ring-2 focus:ring-yellow-500/50 outline-none cursor-pointer hover:border-yellow-500/40 transition-colors text-center">
-                            {allUniqueExercises.map(ex => (<option key={ex} value={ex}>{truncateText(ex)}</option>))}
+                        <select value={rankingExercise} onChange={(e) => setRankingExercise(e.target.value)} className="w-full appearance-none bg-slate-900 border-2 border-yellow-500/20 rounded-xl px-4 py-3 text-yellow-500 font-bold focus:ring-2 focus:ring-yellow-500/50 outline-none cursor-pointer hover:border-yellow-500/40 transition-colors text-center truncate">
+                            {allUniqueExercises.map(ex => (<option key={ex} value={ex}>{ex}</option>))}
                         </select>
                         <div className="pointer-events-none absolute inset-y-0 right-4 flex items-center text-yellow-500"><BicepsFlexed size={20}/></div>
                     </div>
@@ -649,8 +691,8 @@ export default function GymTracker() {
                     <h2 className="text-2xl font-black text-white flex items-center justify-center gap-3"><GitMerge className="text-blue-500" size={32}/> Comparativa de Progreso</h2>
                     <p className="text-slate-400 text-sm">Visualiza todas las líneas de progreso en una sola gráfica.</p>
                     <div className="max-w-xs mx-auto mt-4 relative">
-                        <select value={comparisonExercise} onChange={(e) => setComparisonExercise(e.target.value)} className="w-full appearance-none bg-slate-900 border-2 border-blue-500/20 rounded-xl px-4 py-3 text-blue-400 font-bold focus:ring-2 focus:ring-blue-500/50 outline-none cursor-pointer hover:border-blue-500/40 transition-colors text-center">
-                            {allUniqueExercises.map(ex => (<option key={ex} value={ex}>{truncateText(ex)}</option>))}
+                        <select value={comparisonExercise} onChange={(e) => setComparisonExercise(e.target.value)} className="w-full appearance-none bg-slate-900 border-2 border-blue-500/20 rounded-xl px-4 py-3 text-blue-400 font-bold focus:ring-2 focus:ring-blue-500/50 outline-none cursor-pointer hover:border-blue-500/40 transition-colors text-center truncate">
+                            {allUniqueExercises.map(ex => (<option key={ex} value={ex}>{ex}</option>))}
                         </select>
                         <div className="pointer-events-none absolute inset-y-0 right-4 flex items-center text-blue-500"><Activity size={20}/></div>
                     </div>
@@ -693,7 +735,7 @@ export default function GymTracker() {
             </div>
         )}
 
-        {/* MODAL DE RENOMBRAR (NUEVO) */}
+        {/* MODAL DE RENOMBRAR */}
         {renamingExercise && (
             <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-4">
                 <div className="bg-slate-900 border border-slate-700 p-6 rounded-2xl w-full max-w-md shadow-2xl relative animate-in zoom-in-95 duration-200">
