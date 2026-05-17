@@ -9,12 +9,15 @@ import ExercisesTab from './features/exercises/ExercisesTab';
 import GeneralComparisonTab from './features/general/GeneralComparisonTab';
 import MergeExerciseModal from './features/exercises/MergeExerciseModal';
 import RenameExerciseModal from './features/exercises/RenameExerciseModal';
+import TrainingEditModal from './features/training/TrainingEditModal';
 import TrainingInputPanel from './features/training/TrainingInputPanel';
 import {
+  applyEntryEdits,
   applyExerciseAliases,
   getAllUniqueExercises,
   getAvailableUsers,
   getComparisonChartData,
+  getExerciseOneRepMaxSummaries,
   getGeneralComparisonChartData,
   getGeneralUserSummaries,
   getProgressChartData,
@@ -64,11 +67,17 @@ export default function GymTracker() {
   const [mergeNameInput, setMergeNameInput] = useState('');
   const [renamingExercise, setRenamingExercise] = useState(null);
   const [renameInput, setRenameInput] = useState('');
+  const [entryEdits, setEntryEdits] = useState({});
+  const [editingEntry, setEditingEntry] = useState(null);
+  const [editForm, setEditForm] = useState(null);
 
-  const processedData = useMemo(() => applyExerciseAliases(parsedData, aliases), [parsedData, aliases]);
+  const editedData = useMemo(() => applyEntryEdits(parsedData, entryEdits), [parsedData, entryEdits]);
+  const processedData = useMemo(() => applyExerciseAliases(editedData, aliases), [editedData, aliases]);
   const availableUsers = useMemo(() => getAvailableUsers(processedData), [processedData]);
   const progressUserOptions = useMemo(() => [ALL_USERS_OPTION, ...availableUsers], [availableUsers]);
   const allUniqueExercises = useMemo(() => getAllUniqueExercises(processedData), [processedData]);
+  const exerciseSummaries = useMemo(() => getExerciseOneRepMaxSummaries(processedData), [processedData]);
+  const trainingEntries = useMemo(() => getEditableTrainingEntries(processedData), [processedData]);
   const uniqueUserExercises = useMemo(() => getUserExercises(processedData, selectedUser), [processedData, selectedUser]);
   const isAllUsersSelected = selectedUser === ALL_USERS_OPTION;
   const progressExerciseOptions = isAllUsersSelected ? allUniqueExercises : uniqueUserExercises;
@@ -104,6 +113,7 @@ export default function GymTracker() {
     setTrainingText(cleanText);
     setParsedData(parsed);
     setAliases(payload.aliases || {});
+    setEntryEdits(payload.entryEdits || {});
     setCryptoKey(key);
     setIsUnlocked(true);
     setAuthError('');
@@ -131,6 +141,7 @@ export default function GymTracker() {
           const payload = {
             trainingText: normalizeChatText(initialTrainingText),
             aliases: {},
+            entryEdits: {},
           };
           const { key } = await createEncryptedVault(password, payload, cleanVaultId);
           setHasVault(true);
@@ -143,6 +154,7 @@ export default function GymTracker() {
         const payload = {
           trainingText: normalizeChatText(initialTrainingText),
           aliases: {},
+          entryEdits: {},
         };
         const { key } = await createEncryptedVault(password, payload);
         setHasVault(true);
@@ -181,10 +193,11 @@ export default function GymTracker() {
     return { cleanText, parsed };
   };
 
-  const persistPayload = async (nextTrainingText, nextAliases) => {
+  const persistPayload = async (nextTrainingText, nextAliases, nextEntryEdits = entryEdits) => {
     await saveEncryptedVault(cryptoKey, {
       trainingText: nextTrainingText,
       aliases: nextAliases,
+      entryEdits: nextEntryEdits,
     }, undefined, vaultId.trim());
   };
 
@@ -249,8 +262,11 @@ export default function GymTracker() {
     setParsedData(null);
     setTrainingText('');
     setAliases({});
+    setEntryEdits({});
     setSelectedForMerge([]);
     setNewTrainingText('');
+    setEditingEntry(null);
+    setEditForm(null);
     setPassword('');
     setActiveTab('progress');
   };
@@ -274,7 +290,7 @@ export default function GymTracker() {
     const newAliases = { ...aliases };
     const rawNamesToUpdate = new Set();
 
-    Object.values(parsedData).flat().forEach((entry) => {
+    Object.values(editedData).flat().forEach((entry) => {
       const currentDisplayName = aliases[entry.exercise] || entry.exercise;
       if (selectedForMerge.includes(currentDisplayName)) rawNamesToUpdate.add(entry.exercise);
     });
@@ -310,7 +326,7 @@ export default function GymTracker() {
     const newAliases = { ...aliases };
     const rawNamesToUpdate = new Set();
 
-    Object.values(parsedData).flat().forEach((entry) => {
+    Object.values(editedData).flat().forEach((entry) => {
       const currentDisplay = aliases[entry.exercise] || entry.exercise;
       if (currentDisplay === renamingExercise) rawNamesToUpdate.add(entry.exercise);
     });
@@ -323,6 +339,61 @@ export default function GymTracker() {
     setAliases(newAliases);
     setRenamingExercise(null);
     if (selectedExercise === renamingExercise) setSelectedExercise(finalName);
+  };
+
+  const openTrainingEditModal = (entry) => {
+    setEditingEntry(entry);
+    setEditForm({
+      user: entry.user,
+      date: entry.date,
+      dayLabel: entry.dayLabel,
+      exercise: entry.exercise,
+      sets: String(entry.sets),
+      reps: String(entry.reps),
+      weight: String(entry.weight),
+    });
+  };
+
+  const performTrainingEdit = async () => {
+    if (!editingEntry || !editForm) return;
+
+    const sets = Number(editForm.sets);
+    const reps = Number(editForm.reps);
+    const weight = Number(editForm.weight);
+
+    if (!editForm.user.trim() || !editForm.date.trim() || !editForm.exercise.trim() || sets <= 0 || reps <= 0 || weight <= 0) {
+      setSaveStatus('error');
+      setSaveMessage('Completa usuario, fecha, ejercicio, series, reps y peso válido.');
+      return;
+    }
+
+    try {
+      setSaveStatus('saving');
+      setSaveMessage('');
+
+      const nextEntryEdits = {
+        ...entryEdits,
+        [editingEntry.id]: {
+          user: editForm.user.trim(),
+          date: editForm.date.trim(),
+          dayLabel: editForm.dayLabel.trim() || 'Entrenamiento',
+          exercise: editForm.exercise.trim(),
+          sets,
+          reps,
+          weight,
+        },
+      };
+
+      await persistPayload(trainingText, aliases, nextEntryEdits);
+      setEntryEdits(nextEntryEdits);
+      setEditingEntry(null);
+      setEditForm(null);
+      setSaveStatus('success');
+      setSaveMessage('Corrección guardada y vault cifrado actualizado.');
+    } catch (error) {
+      setSaveStatus('error');
+      setSaveMessage(error.message || 'No se pudo guardar la corrección.');
+    }
   };
 
   if (!isUnlocked || !parsedData) {
@@ -354,10 +425,12 @@ export default function GymTracker() {
             newTrainingText={newTrainingText}
             saveStatus={saveStatus}
             saveMessage={saveMessage}
+            trainingEntries={trainingEntries}
             onNewTrainingTextChange={setNewTrainingText}
             onAppendTraining={appendTraining}
             onExportEncrypted={exportVault}
             onImportEncrypted={importVault}
+            onOpenTrainingEdit={openTrainingEditModal}
           />
         )}
 
@@ -365,6 +438,7 @@ export default function GymTracker() {
           <ExercisesTab
             allUniqueExercises={allUniqueExercises}
             processedData={processedData}
+            exerciseSummaries={exerciseSummaries}
             selectedForMerge={selectedForMerge}
             onToggleSelection={toggleSelection}
             onOpenMergeModal={openMergeModal}
@@ -423,7 +497,33 @@ export default function GymTracker() {
             onConfirm={performRename}
           />
         )}
+
+        {editingEntry && editForm && (
+          <TrainingEditModal
+            editForm={editForm}
+            onEditFormChange={setEditForm}
+            onCancel={() => {
+              setEditingEntry(null);
+              setEditForm(null);
+            }}
+            onConfirm={performTrainingEdit}
+          />
+        )}
       </main>
     </div>
   );
+}
+
+function getEditableTrainingEntries(processedData) {
+  if (!processedData) return [];
+
+  return Object.entries(processedData)
+    .flatMap(([user, entries]) => entries.map((entry) => ({ ...entry, user })))
+    .sort((a, b) => parseTrainingDate(b.date) - parseTrainingDate(a.date));
+}
+
+function parseTrainingDate(date) {
+  const [day, month, year] = date.split(/[/.-]/).map(Number);
+  const fullYear = year < 100 ? 2000 + year : year;
+  return new Date(fullYear, month - 1, day);
 }

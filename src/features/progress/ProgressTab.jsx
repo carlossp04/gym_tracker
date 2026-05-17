@@ -47,7 +47,7 @@ export default function ProgressTab({
           </div>
         </div>
         <div className="lg:col-span-2">
-          <div className={`grid gap-4 h-full ${isAllUsers ? 'grid-cols-2' : 'grid-cols-3'}`}>
+          <div className={`grid gap-4 h-full ${isAllUsers ? 'grid-cols-2' : 'grid-cols-2 xl:grid-cols-4'}`}>
             {isAllUsers ? (
               <>
                 <StatCard icon={Users} iconClassName="text-blue-400" label="Usuarios" value={chartUsers.length} />
@@ -56,6 +56,7 @@ export default function ProgressTab({
             ) : (
               <>
                 <StatCard icon={Dumbbell} iconClassName="text-emerald-400" label="Máximo (PR)" value={stats ? stats.maxWeight : '-'} unit="kg" />
+                <StatCard icon={TrendingUp} iconClassName="text-cyan-400" label="1RM Est." value={stats ? stats.maxOneRepMax : '-'} unit="kg" />
                 <StatCard
                   icon={TrendingUp}
                   iconClassName={stats && Number(stats.numericImprovement) >= 0 ? 'text-green-400' : 'text-red-400'}

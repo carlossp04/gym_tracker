@@ -76,10 +76,13 @@ export function parseWhatsAppChat(text) {
       const weight = parseFloat(setMatch[3].replace(',', '.'));
 
       if (!Number.isNaN(weight) && lastExerciseName) {
+        const entryIndex = users[currentUser].length;
+        const exerciseName = lastExerciseName;
         users[currentUser].push({
+          id: buildEntryId(currentUser, currentDate, exerciseName, entryIndex),
           date: currentDate,
           dayLabel: currentDayLabel || 'Entrenamiento',
-          exercise: lastExerciseName,
+          exercise: exerciseName,
           sets,
           reps,
           weight,
@@ -105,6 +108,13 @@ function normalizeChatDate(date) {
   const parts = date.split(/[/.-]/);
   if (parts.length === 3) return date;
   return `${date}/${String(new Date().getFullYear()).slice(-2)}`;
+}
+
+function buildEntryId(user, date, exercise, entryIndex) {
+  return `${user}__${date}__${exercise}__${entryIndex}`
+    .toLowerCase()
+    .replace(/\s+/g, '-')
+    .replace(/[^a-z0-9/_\-.]+/g, '');
 }
 
 export function validateParsedData(parsedData) {

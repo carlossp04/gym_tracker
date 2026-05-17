@@ -93,8 +93,7 @@ export async function replaceEncryptedVault(serializedVault, vaultId) {
 export async function deleteEncryptedVault(vaultId) {
   localStorage.removeItem(STORAGE_KEY);
   if (supabase) {
-    const { error } = await supabase.from('vaults').delete().eq('id', vaultId);
-    if (error) throw error;
+    throw new Error(`No se permite borrar vault remoto desde cliente: ${vaultId}`);
   }
 }
 

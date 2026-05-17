@@ -13,9 +13,42 @@ export function applyExerciseAliases(parsedData, aliases) {
       entries.map((entry) => ({
         ...entry,
         exercise: aliases[entry.exercise] || entry.exercise,
+        oneRepMax: estimateOneRepMax(entry.weight, entry.reps),
       })),
     ]),
   );
+}
+
+export function applyEntryEdits(parsedData, entryEdits) {
+  if (!parsedData) return null;
+
+  const editedData = {};
+
+  Object.entries(parsedData).forEach(([sourceUser, entries]) => {
+    entries.forEach((entry) => {
+      const edit = entryEdits?.[entry.id] || {};
+      const user = cleanTextValue(edit.user) || sourceUser;
+      const sets = normalizePositiveNumber(edit.sets, entry.sets);
+      const reps = normalizePositiveNumber(edit.reps, entry.reps);
+      const weight = normalizePositiveNumber(edit.weight, entry.weight);
+      const nextEntry = {
+        ...entry,
+        date: cleanTextValue(edit.date) || entry.date,
+        dayLabel: cleanTextValue(edit.dayLabel) || entry.dayLabel,
+        exercise: cleanTextValue(edit.exercise) || entry.exercise,
+        sets,
+        reps,
+        weight,
+        volumen: sets * reps * weight,
+        oneRepMax: estimateOneRepMax(weight, reps),
+      };
+
+      if (!editedData[user]) editedData[user] = [];
+      editedData[user].push(nextEntry);
+    });
+  });
+
+  return editedData;
 }
 
 export function getAvailableUsers(processedData) {
@@ -161,20 +194,63 @@ export function getGeneralUserSummaries(processedData) {
     .sort((a, b) => b.totalVolume - a.totalVolume);
 }
 
+export function getExerciseOneRepMaxSummaries(processedData) {
+  if (!processedData) return {};
+
+  const summaries = {};
+
+  Object.entries(processedData).forEach(([user, entries]) => {
+    entries.forEach((entry) => {
+      const oneRepMax = entry.oneRepMax ?? estimateOneRepMax(entry.weight, entry.reps);
+      const current = summaries[entry.exercise];
+      if (!current || oneRepMax > current.oneRepMax) {
+        summaries[entry.exercise] = {
+          exercise: entry.exercise,
+          user,
+          date: entry.date,
+          weight: entry.weight,
+          reps: entry.reps,
+          oneRepMax,
+        };
+      }
+    });
+  });
+
+  return summaries;
+}
+
 export function getStats(chartData) {
   if (chartData.length === 0) return null;
 
   const maxWeight = Math.max(...chartData.map((entry) => entry.weight));
+  const maxOneRepMax = Math.max(...chartData.map((entry) => entry.oneRepMax ?? estimateOneRepMax(entry.weight, entry.reps)));
   const startWeight = chartData[0].weight;
   const currentWeight = chartData[chartData.length - 1].weight;
   const improvement = startWeight === 0 ? 0 : ((currentWeight - startWeight) / startWeight) * 100;
 
   return {
     maxWeight,
+    maxOneRepMax,
     improvement: formatPercent(improvement),
     numericImprovement: improvement,
     totalSessions: chartData.length,
   };
+}
+
+export function estimateOneRepMax(weight, reps) {
+  const numericWeight = Number(weight);
+  const numericReps = Number(reps);
+  if (!Number.isFinite(numericWeight) || !Number.isFinite(numericReps) || numericWeight <= 0 || numericReps <= 0) return 0;
+  return Math.round(numericWeight * (1 + numericReps / 30) * 10) / 10;
+}
+
+function cleanTextValue(value) {
+  return typeof value === 'string' ? value.trim() : '';
+}
+
+function normalizePositiveNumber(value, fallback) {
+  const numericValue = Number(value);
+  return Number.isFinite(numericValue) && numericValue > 0 ? numericValue : fallback;
 }
 
 function parseChatDate(date) {

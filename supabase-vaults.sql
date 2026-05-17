@@ -15,6 +15,7 @@ alter table public.vaults enable row level security;
 drop policy if exists "public encrypted vault read" on public.vaults;
 drop policy if exists "public encrypted vault write" on public.vaults;
 drop policy if exists "public encrypted vault delete" on public.vaults;
+drop policy if exists "public encrypted vault update" on public.vaults;
 
 create policy "public encrypted vault read"
 on public.vaults
@@ -34,9 +35,3 @@ for update
 to anon
 using (true)
 with check (true);
-
-create policy "public encrypted vault delete"
-on public.vaults
-for delete
-to anon
-using (true);

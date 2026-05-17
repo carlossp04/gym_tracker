@@ -4,6 +4,7 @@ import { truncateText } from '../../lib/gymMetrics';
 export default function ExercisesTab({
   allUniqueExercises,
   processedData,
+  exerciseSummaries,
   selectedForMerge,
   onToggleSelection,
   onOpenMergeModal,
@@ -31,6 +32,7 @@ export default function ExercisesTab({
               <tr>
                 <th className="p-4 w-12 text-center"><CheckCircle2 size={16} /></th>
                 <th className="p-6">Nombre del Ejercicio</th>
+                <th className="p-6 text-right">1RM estimado</th>
                 <th className="p-6 text-center">Acciones</th>
                 <th className="p-6 text-right">Registros</th>
               </tr>
@@ -39,6 +41,7 @@ export default function ExercisesTab({
               {allUniqueExercises.map((exercise) => {
                 const count = Object.values(processedData).flat().filter((entry) => entry.exercise === exercise).length;
                 const isSelected = selectedForMerge.includes(exercise);
+                const summary = exerciseSummaries[exercise];
 
                 return (
                   <tr key={exercise} className={`transition-colors group ${isSelected ? 'bg-purple-500/10' : 'hover:bg-slate-800/30'}`}>
@@ -49,6 +52,16 @@ export default function ExercisesTab({
                     </td>
                     <td className="p-6 font-bold text-slate-200 group-hover:text-white cursor-pointer max-w-[150px] sm:max-w-[300px] truncate" onClick={() => onToggleSelection(exercise)} title={exercise}>
                       {truncateText(exercise)}
+                    </td>
+                    <td className="p-6 text-right cursor-pointer" onClick={() => onToggleSelection(exercise)}>
+                      {summary ? (
+                        <div className="text-right">
+                          <p className="text-emerald-400 font-black whitespace-nowrap">{summary.oneRepMax} kg</p>
+                          <p className="text-[10px] text-slate-500 whitespace-nowrap">{summary.weight}kg x {summary.reps}</p>
+                        </div>
+                      ) : (
+                        <span className="text-slate-600">-</span>
+                      )}
                     </td>
                     <td className="p-6 text-center">
                       <button

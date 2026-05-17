@@ -80,7 +80,7 @@ export default function AuthScreen({
           </button>
         </form>
 
-        {(hasVault || isRemoteStorage) && (
+        {hasVault && !isRemoteStorage && (
           <button
             type="button"
             onClick={onResetVault}
