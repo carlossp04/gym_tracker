@@ -11,6 +11,15 @@ const activeClasses = {
   exercises: 'bg-purple-500 text-slate-950',
 };
 
+const tabLabels = {
+  progress: 'Progreso',
+  general: 'General',
+  calendar: 'Calendario',
+  training: 'Añadir',
+  records: 'Registros',
+  exercises: 'Ejercicios',
+};
+
 export default function TabNav({ activeTab, onTabChange }) {
   return (
     <div className="flex justify-start md:justify-center mb-6 overflow-x-auto no-scrollbar">
@@ -29,7 +38,7 @@ export default function TabNav({ activeTab, onTabChange }) {
             {tab === 'training' && <PlusCircle size={16} strokeWidth={2.5} />}
             {tab === 'records' && <ClipboardList size={16} strokeWidth={2.5} />}
             {tab === 'exercises' && <Database size={16} strokeWidth={2.5} />}
-            {tab === 'general' ? 'General' : tab === 'calendar' ? 'Calendario' : tab === 'training' ? 'Añadir' : tab === 'records' ? 'Registros' : tab}
+            {tabLabels[tab]}
           </button>
         ))}
       </div>
