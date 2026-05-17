@@ -19,13 +19,15 @@ export function applyExerciseAliases(parsedData, aliases) {
   );
 }
 
-export function applyEntryEdits(parsedData, entryEdits) {
+export function applyEntryEdits(parsedData, entryEdits, deletedEntryIds = {}) {
   if (!parsedData) return null;
 
   const editedData = {};
 
   Object.entries(parsedData).forEach(([sourceUser, entries]) => {
     entries.forEach((entry) => {
+      if (deletedEntryIds?.[entry.id]) return;
+
       const edit = entryEdits?.[entry.id] || {};
       const user = cleanTextValue(edit.user) || sourceUser;
       const sets = normalizePositiveNumber(edit.sets, entry.sets);

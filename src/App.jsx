@@ -76,11 +76,17 @@ export default function GymTracker() {
   const [renamingExercise, setRenamingExercise] = useState(null);
   const [renameInput, setRenameInput] = useState('');
   const [entryEdits, setEntryEdits] = useState({});
+  const [deletedEntryIds, setDeletedEntryIds] = useState({});
   const [editingEntry, setEditingEntry] = useState(null);
+  const [bulkEditingEntries, setBulkEditingEntries] = useState([]);
   const [editForm, setEditForm] = useState(null);
+  const [bulkEditFields, setBulkEditFields] = useState(() => getEmptyBulkEditFields());
   const [recordsFocus, setRecordsFocus] = useState(null);
 
-  const editedData = useMemo(() => applyEntryEdits(parsedData, entryEdits), [parsedData, entryEdits]);
+  const editedData = useMemo(
+    () => applyEntryEdits(parsedData, entryEdits, deletedEntryIds),
+    [parsedData, entryEdits, deletedEntryIds],
+  );
   const processedData = useMemo(() => applyExerciseAliases(editedData, aliases), [editedData, aliases]);
   const availableUsers = useMemo(() => getAvailableUsers(processedData), [processedData]);
   const progressUserOptions = useMemo(() => [ALL_USERS_OPTION, ...availableUsers], [availableUsers]);
@@ -123,6 +129,7 @@ export default function GymTracker() {
     setParsedData(parsed);
     setAliases(payload.aliases || {});
     setEntryEdits(payload.entryEdits || {});
+    setDeletedEntryIds(payload.deletedEntryIds || {});
     setCryptoKey(key);
     setIsUnlocked(true);
     setAuthError('');
@@ -208,6 +215,7 @@ export default function GymTracker() {
           trainingText: normalizeChatText(initialTrainingText),
           aliases: {},
           entryEdits: {},
+          deletedEntryIds: {},
         };
         const { key } = await createEncryptedVault(password, payload);
         await rememberCurrentVaultKey(cleanVaultId, key);
@@ -247,11 +255,17 @@ export default function GymTracker() {
     return { cleanText, parsed };
   };
 
-  const persistPayload = async (nextTrainingText, nextAliases, nextEntryEdits = entryEdits) => {
+  const persistPayload = async (
+    nextTrainingText,
+    nextAliases,
+    nextEntryEdits = entryEdits,
+    nextDeletedEntryIds = deletedEntryIds,
+  ) => {
     await saveEncryptedVault(cryptoKey, {
       trainingText: nextTrainingText,
       aliases: nextAliases,
       entryEdits: nextEntryEdits,
+      deletedEntryIds: nextDeletedEntryIds,
     }, undefined, vaultId.trim());
   };
 
@@ -323,10 +337,13 @@ export default function GymTracker() {
     setTrainingText('');
     setAliases({});
     setEntryEdits({});
+    setDeletedEntryIds({});
     setSelectedForMerge([]);
     setNewTrainingText('');
     setEditingEntry(null);
+    setBulkEditingEntries([]);
     setEditForm(null);
+    setBulkEditFields(getEmptyBulkEditFields());
     setRecordsFocus(null);
     setPassword('');
     setRememberDevice(false);
@@ -405,6 +422,8 @@ export default function GymTracker() {
 
   const openTrainingEditModal = (entry) => {
     setEditingEntry(entry);
+    setBulkEditingEntries([]);
+    setBulkEditFields(getEmptyBulkEditFields());
     setEditForm({
       user: entry.user,
       date: entry.date,
@@ -414,6 +433,73 @@ export default function GymTracker() {
       reps: String(entry.reps),
       weight: String(entry.weight),
     });
+  };
+
+  const openBulkTrainingEditModal = (entries) => {
+    if (!entries.length) return;
+
+    setEditingEntry(null);
+    setBulkEditingEntries(entries);
+    setBulkEditFields(getEmptyBulkEditFields());
+    setEditForm(getBulkEditForm(entries));
+  };
+
+  const updateBulkEditField = (field, enabled) => {
+    setBulkEditFields((current) => ({ ...current, [field]: enabled }));
+  };
+
+  const deleteTrainingEntries = async (entries, confirmMessage, successMessage) => {
+    if (!entries.length) return;
+    if (!window.confirm(confirmMessage)) return;
+
+    try {
+      setSaveStatus('saving');
+      setSaveMessage('');
+
+      const nextDeletedEntryIds = { ...deletedEntryIds };
+      const nextEntryEdits = { ...entryEdits };
+
+      entries.forEach((entry) => {
+        nextDeletedEntryIds[entry.id] = true;
+        delete nextEntryEdits[entry.id];
+      });
+
+      await persistPayload(trainingText, aliases, nextEntryEdits, nextDeletedEntryIds);
+      setEntryEdits(nextEntryEdits);
+      setDeletedEntryIds(nextDeletedEntryIds);
+      setSaveStatus('success');
+      setSaveMessage(successMessage);
+    } catch (error) {
+      setSaveStatus('error');
+      setSaveMessage(error.message || 'No se pudo eliminar el registro.');
+    }
+  };
+
+  const deleteTrainingEntry = (entry) => {
+    deleteTrainingEntries(
+      [entry],
+      `Eliminar este registro de ${entry.exercise} (${entry.date})?`,
+      'Registro eliminado y vault cifrado actualizado.',
+    );
+  };
+
+  const deleteWorkoutExercise = (entries) => {
+    const firstEntry = entries[0];
+    if (!firstEntry) return;
+
+    deleteTrainingEntries(
+      entries,
+      `Eliminar ${entries.length} registro(s) de ${firstEntry.exercise} en ${firstEntry.date}?`,
+      'Ejercicio eliminado del día y vault cifrado actualizado.',
+    );
+  };
+
+  const deleteSelectedTrainingEntries = (entries) => {
+    deleteTrainingEntries(
+      entries,
+      `Eliminar ${entries.length} registro(s) seleccionado(s)?`,
+      `${entries.length} registro(s) eliminado(s) y vault cifrado actualizado.`,
+    );
   };
 
   const openRecordsWorkout = (workout) => {
@@ -463,6 +549,69 @@ export default function GymTracker() {
     }
   };
 
+  const performBulkTrainingEdit = async () => {
+    if (!bulkEditingEntries.length || !editForm) return;
+
+    const enabledFieldNames = Object.entries(bulkEditFields)
+      .filter(([, enabled]) => enabled)
+      .map(([field]) => field);
+
+    if (enabledFieldNames.length === 0) {
+      setSaveStatus('error');
+      setSaveMessage('Marca al menos un campo para aplicar cambios.');
+      return;
+    }
+
+    const sets = Number(editForm.sets);
+    const reps = Number(editForm.reps);
+    const weight = Number(editForm.weight);
+
+    if (
+      (bulkEditFields.user && !editForm.user.trim())
+      || (bulkEditFields.date && !editForm.date.trim())
+      || (bulkEditFields.exercise && !editForm.exercise.trim())
+      || (bulkEditFields.sets && (!Number.isFinite(sets) || sets <= 0))
+      || (bulkEditFields.reps && (!Number.isFinite(reps) || reps <= 0))
+      || (bulkEditFields.weight && (!Number.isFinite(weight) || weight <= 0))
+    ) {
+      setSaveStatus('error');
+      setSaveMessage('Completa valores válidos para los campos marcados.');
+      return;
+    }
+
+    try {
+      setSaveStatus('saving');
+      setSaveMessage('');
+
+      const nextEntryEdits = { ...entryEdits };
+
+      bulkEditingEntries.forEach((entry) => {
+        const nextEdit = { ...(nextEntryEdits[entry.id] || {}) };
+
+        if (bulkEditFields.user) nextEdit.user = editForm.user.trim();
+        if (bulkEditFields.date) nextEdit.date = editForm.date.trim();
+        if (bulkEditFields.dayLabel) nextEdit.dayLabel = editForm.dayLabel.trim() || 'Entrenamiento';
+        if (bulkEditFields.exercise) nextEdit.exercise = editForm.exercise.trim();
+        if (bulkEditFields.sets) nextEdit.sets = sets;
+        if (bulkEditFields.reps) nextEdit.reps = reps;
+        if (bulkEditFields.weight) nextEdit.weight = weight;
+
+        nextEntryEdits[entry.id] = nextEdit;
+      });
+
+      await persistPayload(trainingText, aliases, nextEntryEdits);
+      setEntryEdits(nextEntryEdits);
+      setBulkEditingEntries([]);
+      setEditForm(null);
+      setBulkEditFields(getEmptyBulkEditFields());
+      setSaveStatus('success');
+      setSaveMessage(`${bulkEditingEntries.length} registros actualizados y vault cifrado actualizado.`);
+    } catch (error) {
+      setSaveStatus('error');
+      setSaveMessage(error.message || 'No se pudieron guardar los cambios masivos.');
+    }
+  };
+
   if (!isUnlocked || !parsedData) {
     return (
       <AuthScreen
@@ -507,6 +656,10 @@ export default function GymTracker() {
             trainingEntries={trainingEntries}
             focusedWorkout={recordsFocus}
             onOpenTrainingEdit={openTrainingEditModal}
+            onOpenBulkTrainingEdit={openBulkTrainingEditModal}
+            onDeleteTrainingEntry={deleteTrainingEntry}
+            onDeleteWorkoutExercise={deleteWorkoutExercise}
+            onDeleteSelectedTrainingEntries={deleteSelectedTrainingEntries}
           />
         )}
 
@@ -586,9 +739,56 @@ export default function GymTracker() {
             onConfirm={performTrainingEdit}
           />
         )}
+
+        {bulkEditingEntries.length > 0 && editForm && (
+          <TrainingEditModal
+            mode="bulk"
+            selectedCount={bulkEditingEntries.length}
+            editForm={editForm}
+            enabledFields={bulkEditFields}
+            onFieldEnabledChange={updateBulkEditField}
+            onEditFormChange={setEditForm}
+            onCancel={() => {
+              setBulkEditingEntries([]);
+              setEditForm(null);
+              setBulkEditFields(getEmptyBulkEditFields());
+            }}
+            onConfirm={performBulkTrainingEdit}
+          />
+        )}
       </main>
     </div>
   );
+}
+
+function getEmptyBulkEditFields() {
+  return {
+    user: false,
+    date: false,
+    dayLabel: false,
+    exercise: false,
+    sets: false,
+    reps: false,
+    weight: false,
+  };
+}
+
+function getBulkEditForm(entries) {
+  return {
+    user: getSharedEntryValue(entries, 'user'),
+    date: getSharedEntryValue(entries, 'date'),
+    dayLabel: getSharedEntryValue(entries, 'dayLabel'),
+    exercise: getSharedEntryValue(entries, 'exercise'),
+    sets: getSharedEntryValue(entries, 'sets'),
+    reps: getSharedEntryValue(entries, 'reps'),
+    weight: getSharedEntryValue(entries, 'weight'),
+  };
+}
+
+function getSharedEntryValue(entries, field) {
+  const firstValue = String(entries[0]?.[field] ?? '');
+  const hasSameValue = entries.every((entry) => String(entry[field] ?? '') === firstValue);
+  return hasSameValue ? firstValue : '';
 }
 
 function getEditableTrainingEntries(processedData) {

@@ -8,8 +8,13 @@ export default function TrainingEditModal({
   onEditFormChange,
   onCancel,
   onConfirm,
+  mode = 'single',
+  selectedCount = 1,
+  enabledFields = null,
+  onFieldEnabledChange = null,
 }) {
   const oneRepMax = estimateOneRepMax(editForm.weight, editForm.reps);
+  const isBulk = mode === 'bulk';
 
   const updateField = (field, value) => {
     onEditFormChange((current) => ({ ...current, [field]: value }));
@@ -23,46 +28,84 @@ export default function TrainingEditModal({
           <Save size={30} />
           <div>
             <h3 className="text-xl font-bold text-white">Editar entrenamiento</h3>
-            <p className="text-xs text-slate-500">Corrige datos parseados. El texto original queda intacto.</p>
+            <p className="text-xs text-slate-500">
+              {isBulk
+                ? `${selectedCount} registros seleccionados. Solo se actualizan campos marcados.`
+                : 'Corrige datos parseados. El texto original queda intacto.'}
+            </p>
           </div>
         </div>
 
         <div className="grid sm:grid-cols-2 gap-3 sm:gap-4">
-          <Field label="Usuario">
+          <Field
+            label="Usuario"
+            field="user"
+            isBulk={isBulk}
+            enabledFields={enabledFields}
+            onFieldEnabledChange={onFieldEnabledChange}
+          >
             <input
               type="text"
               value={editForm.user}
               onChange={(event) => updateField('user', event.target.value)}
               className={inputClasses}
               autoFocus
+              disabled={isBulk && !enabledFields?.user}
             />
           </Field>
-          <Field label="Fecha">
+          <Field
+            label="Fecha"
+            field="date"
+            isBulk={isBulk}
+            enabledFields={enabledFields}
+            onFieldEnabledChange={onFieldEnabledChange}
+          >
             <input
               type="text"
               value={editForm.date}
               onChange={(event) => updateField('date', event.target.value)}
               className={inputClasses}
               placeholder="dd/mm/aa"
+              disabled={isBulk && !enabledFields?.date}
             />
           </Field>
-          <Field label="Día / bloque">
+          <Field
+            label="Día / bloque"
+            field="dayLabel"
+            isBulk={isBulk}
+            enabledFields={enabledFields}
+            onFieldEnabledChange={onFieldEnabledChange}
+          >
             <input
               type="text"
               value={editForm.dayLabel}
               onChange={(event) => updateField('dayLabel', event.target.value)}
               className={inputClasses}
+              disabled={isBulk && !enabledFields?.dayLabel}
             />
           </Field>
-          <Field label="Ejercicio">
+          <Field
+            label="Ejercicio"
+            field="exercise"
+            isBulk={isBulk}
+            enabledFields={enabledFields}
+            onFieldEnabledChange={onFieldEnabledChange}
+          >
             <input
               type="text"
               value={editForm.exercise}
               onChange={(event) => updateField('exercise', event.target.value)}
               className={inputClasses}
+              disabled={isBulk && !enabledFields?.exercise}
             />
           </Field>
-          <Field label="Series">
+          <Field
+            label="Series"
+            field="sets"
+            isBulk={isBulk}
+            enabledFields={enabledFields}
+            onFieldEnabledChange={onFieldEnabledChange}
+          >
             <input
               type="number"
               min="1"
@@ -70,9 +113,16 @@ export default function TrainingEditModal({
               value={editForm.sets}
               onChange={(event) => updateField('sets', event.target.value)}
               className={inputClasses}
+              disabled={isBulk && !enabledFields?.sets}
             />
           </Field>
-          <Field label="Reps">
+          <Field
+            label="Reps"
+            field="reps"
+            isBulk={isBulk}
+            enabledFields={enabledFields}
+            onFieldEnabledChange={onFieldEnabledChange}
+          >
             <input
               type="number"
               min="1"
@@ -80,9 +130,16 @@ export default function TrainingEditModal({
               value={editForm.reps}
               onChange={(event) => updateField('reps', event.target.value)}
               className={inputClasses}
+              disabled={isBulk && !enabledFields?.reps}
             />
           </Field>
-          <Field label="Peso kg">
+          <Field
+            label="Peso kg"
+            field="weight"
+            isBulk={isBulk}
+            enabledFields={enabledFields}
+            onFieldEnabledChange={onFieldEnabledChange}
+          >
             <input
               type="number"
               min="0"
@@ -90,6 +147,7 @@ export default function TrainingEditModal({
               value={editForm.weight}
               onChange={(event) => updateField('weight', event.target.value)}
               className={inputClasses}
+              disabled={isBulk && !enabledFields?.weight}
             />
           </Field>
           <div className="bg-slate-950 border border-slate-800 rounded-xl p-3 flex flex-col justify-center">
@@ -100,17 +158,31 @@ export default function TrainingEditModal({
 
         <div className="sticky bottom-0 -mx-4 sm:-mx-6 px-4 sm:px-6 pt-4 pb-1 bg-slate-900 flex flex-col sm:flex-row gap-3 mt-4 sm:mt-6">
           <button onClick={onCancel} className="flex-1 py-3 rounded-xl font-bold text-slate-400 hover:bg-slate-800 transition-colors">Cancelar</button>
-          <button onClick={onConfirm} className="flex-1 py-3 rounded-xl font-bold bg-emerald-500 hover:bg-emerald-400 text-slate-950 shadow-lg shadow-emerald-900/20 transition-colors">Guardar corrección</button>
+          <button onClick={onConfirm} className="flex-1 py-3 rounded-xl font-bold bg-emerald-500 hover:bg-emerald-400 text-slate-950 shadow-lg shadow-emerald-900/20 transition-colors">
+            {isBulk ? 'Guardar cambios masivos' : 'Guardar corrección'}
+          </button>
         </div>
       </div>
     </div>
   );
 }
 
-function Field({ label, children }) {
+function Field({ label, field, isBulk, enabledFields, onFieldEnabledChange, children }) {
+  const enabled = !isBulk || enabledFields?.[field];
+
   return (
     <label className="block">
-      <span className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-2 block">{label}</span>
+      <span className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-2 flex items-center gap-2">
+        {isBulk && (
+          <input
+            type="checkbox"
+            checked={Boolean(enabled)}
+            onChange={(event) => onFieldEnabledChange(field, event.target.checked)}
+            className="h-3.5 w-3.5 accent-emerald-500"
+          />
+        )}
+        {label}
+      </span>
       {children}
     </label>
   );

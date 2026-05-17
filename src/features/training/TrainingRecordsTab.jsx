@@ -1,10 +1,19 @@
 import { useMemo, useState } from 'react';
-import { CalendarDays, FilterX, Pencil, Search } from 'lucide-react';
+import { CalendarDays, FilterX, ListX, Pencil, Search, SquarePen, Trash2, X } from 'lucide-react';
 
 const ALL_OPTIONS = 'Todos';
 
-export default function TrainingRecordsTab({ trainingEntries, focusedWorkout, onOpenTrainingEdit }) {
+export default function TrainingRecordsTab({
+  trainingEntries,
+  focusedWorkout,
+  onOpenTrainingEdit,
+  onOpenBulkTrainingEdit,
+  onDeleteTrainingEntry,
+  onDeleteWorkoutExercise,
+  onDeleteSelectedTrainingEntries,
+}) {
   const [filters, setFilters] = useState(() => getInitialFilters(focusedWorkout));
+  const [selectedEntryIds, setSelectedEntryIds] = useState([]);
 
   const users = useMemo(
     () => [ALL_OPTIONS, ...new Set(trainingEntries.map((entry) => entry.user).sort())],
@@ -35,7 +44,14 @@ export default function TrainingRecordsTab({ trainingEntries, focusedWorkout, on
   }, [filters, trainingEntries]);
 
   const groupedEntries = useMemo(() => groupEntriesByWorkout(filteredEntries), [filteredEntries]);
+  const filteredEntryIds = useMemo(() => new Set(filteredEntries.map((entry) => entry.id)), [filteredEntries]);
+  const selectedEntryIdSet = useMemo(() => new Set(selectedEntryIds), [selectedEntryIds]);
+  const selectedEntries = useMemo(
+    () => filteredEntries.filter((entry) => selectedEntryIdSet.has(entry.id)),
+    [filteredEntries, selectedEntryIdSet],
+  );
   const hasActiveFilters = Object.values(filters).some((value) => value && value !== ALL_OPTIONS);
+  const allVisibleSelected = filteredEntries.length > 0 && selectedEntries.length === filteredEntries.length;
 
   const updateFilter = (key, value) => {
     setFilters((current) => ({ ...current, [key]: value }));
@@ -51,6 +67,39 @@ export default function TrainingRecordsTab({ trainingEntries, focusedWorkout, on
     });
   };
 
+  const toggleEntrySelection = (entryId) => {
+    setSelectedEntryIds((current) =>
+      current.includes(entryId)
+        ? current.filter((id) => id !== entryId)
+        : [...current, entryId],
+    );
+  };
+
+  const toggleAllVisible = () => {
+    setSelectedEntryIds((current) => {
+      if (allVisibleSelected) return current.filter((id) => !filteredEntryIds.has(id));
+
+      const nextSelection = new Set(current);
+      filteredEntries.forEach((entry) => nextSelection.add(entry.id));
+      return [...nextSelection];
+    });
+  };
+
+  const clearSelection = () => {
+    setSelectedEntryIds([]);
+  };
+
+  const openBulkEdit = () => {
+    if (selectedEntries.length === 0) return;
+    onOpenBulkTrainingEdit(selectedEntries);
+    clearSelection();
+  };
+
+  const deleteSelected = () => {
+    if (selectedEntries.length === 0) return;
+    onDeleteSelectedTrainingEntries(selectedEntries);
+  };
+
   return (
     <div className="animate-in fade-in slide-in-from-right-4 duration-500 space-y-6">
       <section className="bg-slate-900 border border-slate-800 rounded-3xl overflow-hidden shadow-xl">
@@ -61,6 +110,32 @@ export default function TrainingRecordsTab({ trainingEntries, focusedWorkout, on
               <p className="text-sm text-slate-400 mt-1">Corrige usuario, fecha, ejercicio, series, reps o peso.</p>
             </div>
             <div className="flex flex-wrap items-center gap-2">
+              {selectedEntries.length > 0 && (
+                <>
+                  <span className="text-xs font-mono text-emerald-300 bg-emerald-500/10 border border-emerald-500/20 rounded-full px-3 py-1">
+                    {selectedEntries.length} seleccionados
+                  </span>
+                  <button
+                    onClick={openBulkEdit}
+                    className="bg-emerald-500 hover:bg-emerald-400 text-slate-950 px-3 py-1.5 rounded-lg text-xs font-black flex items-center gap-2"
+                  >
+                    <SquarePen size={14} /> Editar selección
+                  </button>
+                  <button
+                    onClick={deleteSelected}
+                    className="bg-red-500 hover:bg-red-400 text-white px-3 py-1.5 rounded-lg text-xs font-black flex items-center gap-2"
+                  >
+                    <Trash2 size={14} /> Eliminar selección
+                  </button>
+                  <button
+                    onClick={clearSelection}
+                    className="bg-slate-800 hover:bg-slate-700 text-slate-300 p-1.5 rounded-lg"
+                    title="Limpiar selección"
+                  >
+                    <X size={14} />
+                  </button>
+                </>
+              )}
               <span className="text-xs font-mono text-slate-400 bg-slate-950 border border-slate-800 rounded-full px-3 py-1">
                 {filteredEntries.length} de {trainingEntries.length} sets
               </span>
@@ -134,9 +209,18 @@ export default function TrainingRecordsTab({ trainingEntries, focusedWorkout, on
         </div>
 
         <div className="overflow-x-auto">
-          <table className="w-full text-left min-w-[760px]">
+          <table className="w-full text-left min-w-[860px]">
             <thead className="bg-slate-950 text-slate-500 uppercase text-xs tracking-wider font-bold">
               <tr>
+                <th className="p-4 text-center w-12">
+                  <input
+                    type="checkbox"
+                    checked={allVisibleSelected}
+                    onChange={toggleAllVisible}
+                    aria-label="Seleccionar registros visibles"
+                    className="h-4 w-4 accent-emerald-500"
+                  />
+                </th>
                 <th className="p-4">Fecha</th>
                 <th className="p-4">Usuario</th>
                 <th className="p-4">Ejercicio</th>
@@ -144,7 +228,7 @@ export default function TrainingRecordsTab({ trainingEntries, focusedWorkout, on
                 <th className="p-4 text-right">Reps</th>
                 <th className="p-4 text-right">Kg</th>
                 <th className="p-4 text-right">1RM</th>
-                <th className="p-4 text-center">Editar</th>
+                <th className="p-4 text-center">Acciones</th>
               </tr>
             </thead>
             <tbody className="text-sm">
@@ -155,11 +239,15 @@ export default function TrainingRecordsTab({ trainingEntries, focusedWorkout, on
                   groupIndex={groupIndex}
                   isFocused={focusedWorkout?.workoutKey === group.key}
                   onOpenTrainingEdit={onOpenTrainingEdit}
+                  onDeleteTrainingEntry={onDeleteTrainingEntry}
+                  onDeleteWorkoutExercise={onDeleteWorkoutExercise}
+                  selectedEntryIdSet={selectedEntryIdSet}
+                  onToggleEntrySelection={toggleEntrySelection}
                 />
               ))}
               {groupedEntries.length === 0 && (
                 <tr>
-                  <td colSpan={8} className="p-10 text-center text-slate-500">
+                  <td colSpan={9} className="p-10 text-center text-slate-500">
                     Sin registros con esos filtros.
                   </td>
                 </tr>
@@ -172,18 +260,32 @@ export default function TrainingRecordsTab({ trainingEntries, focusedWorkout, on
   );
 }
 
-function WorkoutGroup({ group, groupIndex, isFocused, onOpenTrainingEdit }) {
+function WorkoutGroup({
+  group,
+  groupIndex,
+  isFocused,
+  onOpenTrainingEdit,
+  onDeleteTrainingEntry,
+  onDeleteWorkoutExercise,
+  selectedEntryIdSet,
+  onToggleEntrySelection,
+}) {
   const stripeClass = groupIndex % 2 === 0 ? 'border-l-4 border-l-emerald-500/80' : 'border-l-4 border-l-cyan-500/80';
   const rowBgClass = groupIndex % 2 === 0 ? 'bg-emerald-500/[0.03]' : 'bg-cyan-500/[0.03]';
   const headerBgClass = isFocused
     ? 'bg-amber-400/15 text-amber-200 ring-2 ring-inset ring-amber-400/60'
     : groupIndex % 2 === 0 ? 'bg-emerald-500/10 text-emerald-200' : 'bg-cyan-500/10 text-cyan-200';
   const totalVolume = Math.round(group.entries.reduce((sum, entry) => sum + entry.sets * entry.reps * entry.weight, 0));
+  const entriesByExercise = group.entries.reduce((entriesMap, entry) => {
+    if (!entriesMap.has(entry.exercise)) entriesMap.set(entry.exercise, []);
+    entriesMap.get(entry.exercise).push(entry);
+    return entriesMap;
+  }, new Map());
 
   return (
     <>
       <tr className={`${headerBgClass} ${stripeClass}`}>
-        <td colSpan={8} className="px-4 py-3">
+        <td colSpan={9} className="px-4 py-3">
           <div className="flex flex-wrap items-center justify-between gap-2">
             <div className="flex flex-wrap items-center gap-2 font-bold">
               <span>{group.date}</span>
@@ -199,29 +301,59 @@ function WorkoutGroup({ group, groupIndex, isFocused, onOpenTrainingEdit }) {
           </div>
         </td>
       </tr>
-      {group.entries.map((entry, entryIndex) => (
-        <tr
-          key={entry.id}
-          className={`${rowBgClass} ${stripeClass} hover:bg-slate-800/40 transition-colors border-t border-slate-800/50 ${entryIndex === group.entries.length - 1 ? 'border-b-8 border-b-slate-950' : ''}`}
-        >
-          <td className="p-4 text-slate-400 font-mono whitespace-nowrap">{entry.date}</td>
-          <td className="p-4 text-slate-300 font-bold whitespace-nowrap">{entry.user}</td>
-          <td className="p-4 text-white font-bold max-w-[260px] truncate" title={entry.exercise}>{entry.exercise}</td>
-          <td className="p-4 text-right text-slate-300">{entry.sets}</td>
-          <td className="p-4 text-right text-slate-300">{entry.reps}</td>
-          <td className="p-4 text-right text-slate-300">{entry.weight}</td>
-          <td className="p-4 text-right text-emerald-400 font-black">{entry.oneRepMax} kg</td>
-          <td className="p-4 text-center">
-            <button
-              onClick={() => onOpenTrainingEdit(entry)}
-              className="p-2 hover:bg-slate-700 rounded-lg text-slate-500 hover:text-white transition-colors"
-              title="Editar registro"
-            >
-              <Pencil size={16} />
-            </button>
-          </td>
-        </tr>
-      ))}
+      {group.entries.map((entry, entryIndex) => {
+        const isSelected = selectedEntryIdSet.has(entry.id);
+        const workoutExerciseEntries = entriesByExercise.get(entry.exercise) || [entry];
+
+        return (
+          <tr
+            key={entry.id}
+            className={`${isSelected ? 'bg-emerald-500/10' : rowBgClass} ${stripeClass} hover:bg-slate-800/40 transition-colors border-t border-slate-800/50 ${entryIndex === group.entries.length - 1 ? 'border-b-8 border-b-slate-950' : ''}`}
+          >
+            <td className="p-4 text-center">
+              <input
+                type="checkbox"
+                checked={isSelected}
+                onChange={() => onToggleEntrySelection(entry.id)}
+                aria-label={`Seleccionar ${entry.exercise}`}
+                className="h-4 w-4 accent-emerald-500"
+              />
+            </td>
+            <td className="p-4 text-slate-400 font-mono whitespace-nowrap">{entry.date}</td>
+            <td className="p-4 text-slate-300 font-bold whitespace-nowrap">{entry.user}</td>
+            <td className="p-4 text-white font-bold max-w-[260px] truncate" title={entry.exercise}>{entry.exercise}</td>
+            <td className="p-4 text-right text-slate-300">{entry.sets}</td>
+            <td className="p-4 text-right text-slate-300">{entry.reps}</td>
+            <td className="p-4 text-right text-slate-300">{entry.weight}</td>
+            <td className="p-4 text-right text-emerald-400 font-black">{entry.oneRepMax} kg</td>
+            <td className="p-4">
+              <div className="flex items-center justify-center gap-1">
+                <button
+                  onClick={() => onOpenTrainingEdit(entry)}
+                  className="p-2 hover:bg-slate-700 rounded-lg text-slate-500 hover:text-white transition-colors"
+                  title="Editar registro"
+                >
+                  <Pencil size={16} />
+                </button>
+                <button
+                  onClick={() => onDeleteTrainingEntry(entry)}
+                  className="p-2 hover:bg-red-500/10 rounded-lg text-slate-500 hover:text-red-300 transition-colors"
+                  title="Eliminar registro"
+                >
+                  <Trash2 size={16} />
+                </button>
+                <button
+                  onClick={() => onDeleteWorkoutExercise(workoutExerciseEntries)}
+                  className="p-2 hover:bg-red-500/10 rounded-lg text-slate-500 hover:text-red-300 transition-colors"
+                  title="Eliminar este ejercicio del día"
+                >
+                  <ListX size={16} />
+                </button>
+              </div>
+            </td>
+          </tr>
+        );
+      })}
     </>
   );
 }
