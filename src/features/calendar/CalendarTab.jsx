@@ -31,8 +31,8 @@ export default function CalendarTab({ processedData, availableUsers, userColors 
         <p className="text-slate-400 text-sm">Días con entrenamiento marcado por usuario.</p>
       </div>
 
-      <div className="grid md:grid-cols-[minmax(220px,320px)_1fr] gap-4 items-stretch">
-        <div className="bg-slate-900 border border-slate-800 p-5 rounded-3xl shadow-xl">
+      <div className="flex flex-col md:flex-row md:justify-center gap-4 items-stretch">
+        <div className="bg-slate-900 border border-slate-800 p-5 rounded-3xl shadow-xl w-full md:w-80">
           <label className="block text-xs font-bold text-slate-500 mb-3 uppercase tracking-wider">Usuario</label>
           <SearchableSelect
             options={[ALL_USERS_OPTION, ...availableUsers]}
@@ -43,7 +43,7 @@ export default function CalendarTab({ processedData, availableUsers, userColors 
           />
         </div>
 
-        <div className="bg-slate-900 border border-slate-800 p-5 rounded-3xl shadow-xl flex items-center justify-between gap-4">
+        <div className="bg-slate-900 border border-slate-800 p-5 rounded-3xl shadow-xl flex items-center justify-between gap-4 w-full md:w-[28rem]">
           <button
             onClick={() => moveMonth(-1)}
             disabled={selectedMonthIndex <= 0}

@@ -33,43 +33,43 @@ export default function ProgressTab({
         </div>
       </div>
 
-      <div className="grid lg:grid-cols-3 gap-6">
-        <div className="lg:col-span-1 space-y-6">
-          <div className="bg-slate-900 border border-slate-800 p-6 rounded-3xl shadow-xl">
-            <label className="block text-xs font-bold text-slate-500 mb-3 uppercase tracking-wider">Ejercicio</label>
-            <SearchableSelect
-              options={exerciseOptions}
-              value={selectedExercise}
-              onChange={onExerciseChange}
-              placeholder="Selecciona o busca..."
-              icon={TrendingUp}
+      {isAllUsers ? (
+        <div className="grid lg:grid-cols-3 gap-6">
+          <div className="lg:col-span-1">
+            <ExercisePicker
+              exerciseOptions={exerciseOptions}
+              selectedExercise={selectedExercise}
+              onExerciseChange={onExerciseChange}
             />
           </div>
-        </div>
-        <div className="lg:col-span-2">
-          <div className={`grid gap-4 h-full ${isAllUsers ? 'grid-cols-2' : 'grid-cols-2 xl:grid-cols-4'}`}>
-            {isAllUsers ? (
-              <>
-                <StatCard icon={Users} iconClassName="text-blue-400" label="Usuarios" value={chartUsers.length} />
-                <StatCard icon={Calendar} iconClassName="text-cyan-400" label="Fechas" value={chartData.length} />
-              </>
-            ) : (
-              <>
-                <StatCard icon={Dumbbell} iconClassName="text-emerald-400" label="Máximo (PR)" value={stats ? stats.maxWeight : '-'} unit="kg" />
-                <StatCard icon={TrendingUp} iconClassName="text-cyan-400" label="1RM Est." value={stats ? stats.maxOneRepMax : '-'} unit="kg" />
-                <StatCard
-                  icon={TrendingUp}
-                  iconClassName={stats && Number(stats.numericImprovement) >= 0 ? 'text-green-400' : 'text-red-400'}
-                  label="Progreso"
-                  value={stats ? stats.improvement : '-'}
-                  valueClassName={stats && Number(stats.numericImprovement) >= 0 ? 'text-green-400' : 'text-red-400'}
-                />
-                <StatCard icon={Calendar} iconClassName="text-blue-400" label="Sesiones" value={stats ? stats.totalSessions : '-'} />
-              </>
-            )}
+          <div className="lg:col-span-2">
+            <div className="grid grid-cols-2 gap-4 h-full">
+              <StatCard icon={Users} iconClassName="text-blue-400" label="Usuarios" value={chartUsers.length} />
+              <StatCard icon={Calendar} iconClassName="text-cyan-400" label="Fechas" value={chartData.length} />
+            </div>
           </div>
         </div>
-      </div>
+      ) : (
+        <div className="grid grid-cols-2 xl:grid-cols-5 gap-4 xl:gap-6">
+          <div className="col-span-2 xl:col-span-1">
+            <ExercisePicker
+              exerciseOptions={exerciseOptions}
+              selectedExercise={selectedExercise}
+              onExerciseChange={onExerciseChange}
+            />
+          </div>
+          <StatCard icon={Dumbbell} iconClassName="text-emerald-400" label="Máximo (PR)" value={stats ? stats.maxWeight : '-'} unit="kg" />
+          <StatCard icon={TrendingUp} iconClassName="text-cyan-400" label="1RM Est." value={stats ? stats.maxOneRepMax : '-'} unit="kg" />
+          <StatCard
+            icon={TrendingUp}
+            iconClassName={stats && Number(stats.numericImprovement) >= 0 ? 'text-green-400' : 'text-red-400'}
+            label="Progreso"
+            value={stats ? stats.improvement : '-'}
+            valueClassName={stats && Number(stats.numericImprovement) >= 0 ? 'text-green-400' : 'text-red-400'}
+          />
+          <StatCard icon={Calendar} iconClassName="text-blue-400" label="Sesiones" value={stats ? stats.totalSessions : '-'} />
+        </div>
+      )}
 
       <div className="bg-slate-900 border border-slate-800 p-6 rounded-3xl shadow-xl relative overflow-hidden">
         <div className="flex items-center justify-between mb-8">
@@ -107,6 +107,21 @@ export default function ProgressTab({
   );
 }
 
+function ExercisePicker({ exerciseOptions, selectedExercise, onExerciseChange }) {
+  return (
+    <div className="bg-slate-900 border border-slate-800 p-6 rounded-3xl shadow-xl h-full">
+      <label className="block text-xs font-bold text-slate-500 mb-3 uppercase tracking-wider">Ejercicio</label>
+      <SearchableSelect
+        options={exerciseOptions}
+        value={selectedExercise}
+        onChange={onExerciseChange}
+        placeholder="Selecciona o busca..."
+        icon={TrendingUp}
+      />
+    </div>
+  );
+}
+
 function formatProgressTooltip(value, name, item, isAllUsers) {
   const reps = isAllUsers ? item.payload?.[`${name}__reps`] : item.payload?.reps;
   const label = isAllUsers ? name : 'Peso Máx';
@@ -117,7 +132,7 @@ function StatCard({ icon, iconClassName, label, value, unit, valueClassName = 't
   const CardIcon = icon;
 
   return (
-    <div className="bg-slate-900/80 p-3 sm:p-5 rounded-3xl border border-slate-800 flex flex-col justify-between">
+    <div className="bg-slate-900/80 p-3 sm:p-5 rounded-3xl border border-slate-800 flex flex-col justify-between h-full min-h-36">
       <div className="bg-slate-800 w-8 h-8 sm:w-10 sm:h-10 rounded-full flex items-center justify-center mb-2">
         <CardIcon size={18} className={iconClassName} />
       </div>
