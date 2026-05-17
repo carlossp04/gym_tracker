@@ -30,7 +30,7 @@ export default function AuthScreen({
               Gym<span className="text-emerald-400">Tracker</span>
             </h1>
             <p className="text-slate-400 text-sm mt-2">
-              {isRemoteStorage ? 'Sincroniza vault cifrado entre dispositivos.' : hasVault ? 'Desbloquea tus entrenamientos cifrados.' : 'Crea vault cifrado con entreno inicial.'}
+              {isRemoteStorage ? 'Abre un vault cifrado existente.' : hasVault ? 'Desbloquea tus entrenamientos cifrados.' : 'Crea vault cifrado con entreno inicial.'}
             </p>
           </div>
         </div>

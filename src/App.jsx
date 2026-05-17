@@ -189,21 +189,14 @@ export default function GymTracker() {
 
       if (isRemoteStorage) {
         const exists = await remoteVaultExists(cleanVaultId);
-        if (exists) {
-          const { key, payload } = await unlockEncryptedVault(password, cleanVaultId);
-          await rememberCurrentVaultKey(cleanVaultId, key);
-          loadTrainingPayload(payload, key);
-        } else {
-          const payload = {
-            trainingText: normalizeChatText(initialTrainingText),
-            aliases: {},
-            entryEdits: {},
-          };
-          const { key } = await createEncryptedVault(password, payload, cleanVaultId);
-          await rememberCurrentVaultKey(cleanVaultId, key);
-          setHasVault(true);
-          loadTrainingPayload(payload, key);
+        if (!exists) {
+          setAuthError('No existe ningún vault con ese ID.');
+          return;
         }
+
+        const { key, payload } = await unlockEncryptedVault(password, cleanVaultId);
+        await rememberCurrentVaultKey(cleanVaultId, key);
+        loadTrainingPayload(payload, key);
       } else if (hasVault) {
         const { key, payload } = await unlockEncryptedVault(password);
         await rememberCurrentVaultKey(cleanVaultId, key);
