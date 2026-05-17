@@ -1,7 +1,7 @@
 import { Save, XCircle } from 'lucide-react';
 import { estimateOneRepMax } from '../../lib/gymMetrics';
 
-const inputClasses = 'w-full bg-slate-950 border border-slate-700 rounded-xl px-4 py-3 text-white focus:ring-2 focus:ring-emerald-500 outline-none';
+const inputClasses = 'w-full bg-slate-950 border border-slate-700 rounded-xl px-4 py-2.5 sm:py-3 text-white focus:ring-2 focus:ring-emerald-500 outline-none';
 
 export default function TrainingEditModal({
   editForm,
@@ -16,10 +16,10 @@ export default function TrainingEditModal({
   };
 
   return (
-    <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-4">
-      <div className="bg-slate-900 border border-slate-700 p-6 rounded-2xl w-full max-w-2xl shadow-2xl relative animate-in zoom-in-95 duration-200">
+    <div className="fixed inset-0 bg-black/80 flex items-start sm:items-center justify-center z-50 p-3 sm:p-4 overflow-y-auto">
+      <div className="bg-slate-900 border border-slate-700 p-4 sm:p-6 rounded-2xl w-full max-w-2xl max-h-[calc(100dvh-1.5rem)] overflow-y-auto my-3 sm:my-0 shadow-2xl relative animate-in zoom-in-95 duration-200">
         <button onClick={onCancel} className="absolute top-4 right-4 text-slate-500 hover:text-white"><XCircle size={24} /></button>
-        <div className="flex items-center gap-3 mb-5 text-emerald-400">
+        <div className="flex items-center gap-3 mb-4 sm:mb-5 pr-8 text-emerald-400">
           <Save size={30} />
           <div>
             <h3 className="text-xl font-bold text-white">Editar entrenamiento</h3>
@@ -27,7 +27,7 @@ export default function TrainingEditModal({
           </div>
         </div>
 
-        <div className="grid sm:grid-cols-2 gap-4">
+        <div className="grid sm:grid-cols-2 gap-3 sm:gap-4">
           <Field label="Usuario">
             <input
               type="text"
@@ -98,7 +98,7 @@ export default function TrainingEditModal({
           </div>
         </div>
 
-        <div className="flex gap-3 mt-6">
+        <div className="sticky bottom-0 -mx-4 sm:-mx-6 px-4 sm:px-6 pt-4 pb-1 bg-slate-900 flex flex-col sm:flex-row gap-3 mt-4 sm:mt-6">
           <button onClick={onCancel} className="flex-1 py-3 rounded-xl font-bold text-slate-400 hover:bg-slate-800 transition-colors">Cancelar</button>
           <button onClick={onConfirm} className="flex-1 py-3 rounded-xl font-bold bg-emerald-500 hover:bg-emerald-400 text-slate-950 shadow-lg shadow-emerald-900/20 transition-colors">Guardar corrección</button>
         </div>

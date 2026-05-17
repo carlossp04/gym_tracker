@@ -17,11 +17,8 @@ export default function ProgressTab({
 }) {
   return (
     <div className="animate-in fade-in slide-in-from-bottom-4 duration-500 space-y-6">
-      <div className="flex flex-col items-center gap-2">
-        <span className="text-xs uppercase font-bold text-slate-500 tracking-widest flex items-center gap-2">
-          <Users size={12} /> Selecciona Usuario
-        </span>
-        <div className="relative max-w-xs mx-auto w-full">
+      <div className="grid md:grid-cols-2 gap-4 max-w-3xl mx-auto">
+        <SelectorBlock label="Selecciona Usuario" icon={Users}>
           <SearchableSelect
             options={availableUsers}
             value={selectedUser}
@@ -30,12 +27,24 @@ export default function ProgressTab({
             icon={User}
             align="center"
           />
+        </SelectorBlock>
+        <div className="hidden md:block">
+          <SelectorBlock label="Ejercicio" icon={TrendingUp}>
+            <SearchableSelect
+              options={exerciseOptions}
+              value={selectedExercise}
+              onChange={onExerciseChange}
+              placeholder="Selecciona o busca..."
+              icon={TrendingUp}
+              align="center"
+            />
+          </SelectorBlock>
         </div>
       </div>
 
       {isAllUsers ? (
         <div className="grid lg:grid-cols-3 gap-6">
-          <div className="lg:col-span-1">
+          <div className="lg:col-span-1 md:hidden">
             <ExercisePicker
               exerciseOptions={exerciseOptions}
               selectedExercise={selectedExercise}
@@ -50,8 +59,8 @@ export default function ProgressTab({
           </div>
         </div>
       ) : (
-        <div className="grid grid-cols-2 xl:grid-cols-5 gap-4 xl:gap-6">
-          <div className="col-span-2 xl:col-span-1">
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 xl:gap-6">
+          <div className="col-span-2 md:hidden">
             <ExercisePicker
               exerciseOptions={exerciseOptions}
               selectedExercise={selectedExercise}
@@ -102,6 +111,21 @@ export default function ProgressTab({
             </div>
           )}
         </div>
+      </div>
+    </div>
+  );
+}
+
+function SelectorBlock({ label, icon, children }) {
+  const LabelIcon = icon;
+
+  return (
+    <div className="flex flex-col items-center gap-2">
+      <span className="text-xs uppercase font-bold text-slate-500 tracking-widest flex items-center gap-2">
+        <LabelIcon size={12} /> {label}
+      </span>
+      <div className="relative w-full">
+        {children}
       </div>
     </div>
   );
