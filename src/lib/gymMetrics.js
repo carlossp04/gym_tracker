@@ -79,11 +79,25 @@ export function getProgressChartData(processedData, selectedUser, selectedExerci
     .sort((a, b) => parseChatDate(a.date) - parseChatDate(b.date));
 
   const groupedByDate = rawData.reduce((acc, curr) => {
-    if (!acc[curr.date] || curr.weight > acc[curr.date].weight) acc[curr.date] = curr;
+    if (!acc[curr.date]) acc[curr.date] = [];
+    acc[curr.date].push(curr);
     return acc;
   }, {});
 
-  return Object.values(groupedByDate);
+  return Object.entries(groupedByDate).map(([date, entries]) => {
+    const maxWeight = Math.max(...entries.map((entry) => entry.weight));
+    const bestSets = entries.filter((entry) => entry.weight === maxWeight);
+    const representative = bestSets[0];
+
+    return {
+      ...representative,
+      date,
+      weight: maxWeight,
+      reps: representative.reps,
+      bestSets,
+      workoutKey: buildWorkoutKey(selectedUser, representative.date, representative.dayLabel),
+    };
+  });
 }
 
 export function getComparisonChartData(processedData, comparisonExercise) {
@@ -98,6 +112,10 @@ export function getComparisonChartData(processedData, comparisonExercise) {
       if (!currentMax || entry.weight > currentMax) {
         dataByDate[entry.date][user] = entry.weight;
         dataByDate[entry.date][`${user}__reps`] = entry.reps;
+        dataByDate[entry.date][`${user}__bestSets`] = [entry];
+        dataByDate[entry.date][`${user}__workoutKey`] = buildWorkoutKey(user, entry.date, entry.dayLabel);
+      } else if (entry.weight === currentMax) {
+        dataByDate[entry.date][`${user}__bestSets`].push(entry);
       }
     });
   });
@@ -257,6 +275,10 @@ function parseChatDate(date) {
   const [day, month, year] = date.split(/[/.-]/);
   const fullYear = year.length === 2 ? `20${year}` : year;
   return new Date(`${fullYear}-${month}-${day}`);
+}
+
+function buildWorkoutKey(user, date, dayLabel) {
+  return `${date}__${user}__${dayLabel}`;
 }
 
 function getWeekKey(date) {

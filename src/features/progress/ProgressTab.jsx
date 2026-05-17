@@ -1,4 +1,4 @@
-import { Calendar, Dumbbell, TrendingUp, User, Users } from 'lucide-react';
+import { Calendar, Dumbbell, Eye, TrendingUp, User, Users } from 'lucide-react';
 import { CartesianGrid, Legend, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 import SearchableSelect from '../../components/SearchableSelect';
 
@@ -14,6 +14,7 @@ export default function ProgressTab({
   chartData,
   onUserChange,
   onExerciseChange,
+  onOpenRecordsWorkout,
 }) {
   return (
     <div className="animate-in fade-in slide-in-from-bottom-4 duration-500 space-y-6">
@@ -43,19 +44,17 @@ export default function ProgressTab({
       </div>
 
       {isAllUsers ? (
-        <div className="grid lg:grid-cols-3 gap-6">
-          <div className="lg:col-span-1 md:hidden">
+        <div className="space-y-4 max-w-3xl mx-auto">
+          <div className="md:hidden">
             <ExercisePicker
               exerciseOptions={exerciseOptions}
               selectedExercise={selectedExercise}
               onExerciseChange={onExerciseChange}
             />
           </div>
-          <div className="lg:col-span-2">
-            <div className="grid grid-cols-2 gap-4 h-full">
-              <StatCard icon={Users} iconClassName="text-blue-400" label="Usuarios" value={chartUsers.length} />
-              <StatCard icon={Calendar} iconClassName="text-cyan-400" label="Fechas" value={chartData.length} />
-            </div>
+          <div className="grid grid-cols-2 gap-4 xl:gap-6">
+            <StatCard icon={Users} iconClassName="text-blue-400" label="Usuarios" value={chartUsers.length} />
+            <StatCard icon={Calendar} iconClassName="text-cyan-400" label="Fechas" value={chartData.length} />
           </div>
         </div>
       ) : (
@@ -93,14 +92,14 @@ export default function ProgressTab({
                 <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" vertical={false} />
                 <XAxis dataKey="date" stroke="#64748b" fontSize={12} tickMargin={15} axisLine={false} tickLine={false} />
                 <YAxis stroke="#64748b" fontSize={12} domain={['dataMin - 5', 'dataMax + 5']} axisLine={false} tickLine={false} tickFormatter={(value) => `${value}kg`} />
-                <Tooltip contentStyle={{ backgroundColor: '#0f172a', borderColor: '#334155', color: '#f8fafc', borderRadius: '12px', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.5)' }} itemStyle={{ color: '#34d399', fontWeight: 'bold' }} labelStyle={{ color: '#94a3b8', marginBottom: '0.5rem' }} formatter={(value, name, item) => formatProgressTooltip(value, name, item, isAllUsers)} />
+                <Tooltip content={<ProgressTooltip isAllUsers={isAllUsers} />} />
                 {isAllUsers && <Legend wrapperStyle={{ paddingTop: '20px' }} />}
                 {isAllUsers ? (
                   chartUsers.map((user, idx) => (
                     <Line key={user} type="monotone" dataKey={user} name={user} stroke={userColors[idx % userColors.length]} strokeWidth={3} connectNulls dot={chartData.length < 30 ? { r: 4, fill: '#0f172a', stroke: userColors[idx % userColors.length], strokeWidth: 2 } : false} activeDot={{ r: 6 }} />
                   ))
                 ) : (
-                  <Line type="monotone" dataKey="weight" name="Peso Máx" stroke="#10b981" strokeWidth={4} dot={chartData.length < 30 ? { r: 4, fill: '#0f172a', stroke: '#10b981', strokeWidth: 2 } : false} activeDot={{ r: 8, fill: '#10b981' }} />
+                  <Line type="monotone" dataKey="weight" name="Mejor Serie(s)" stroke="#10b981" strokeWidth={4} dot={chartData.length < 30 ? { r: 4, fill: '#0f172a', stroke: '#10b981', strokeWidth: 2 } : false} activeDot={{ r: 8, fill: '#10b981' }} />
                 )}
               </LineChart>
             </ResponsiveContainer>
@@ -112,6 +111,15 @@ export default function ProgressTab({
           )}
         </div>
       </div>
+
+      {chartData.length > 0 && (
+        <ProgressDataTable
+          chartData={chartData}
+          chartUsers={chartUsers}
+          isAllUsers={isAllUsers}
+          onOpenRecordsWorkout={onOpenRecordsWorkout}
+        />
+      )}
     </div>
   );
 }
@@ -146,12 +154,6 @@ function ExercisePicker({ exerciseOptions, selectedExercise, onExerciseChange })
   );
 }
 
-function formatProgressTooltip(value, name, item, isAllUsers) {
-  const reps = isAllUsers ? item.payload?.[`${name}__reps`] : item.payload?.reps;
-  const label = isAllUsers ? name : 'Peso Máx';
-  return [`${value} kg${reps ? ` x ${reps} reps` : ''}`, label];
-}
-
 function StatCard({ icon, iconClassName, label, value, unit, valueClassName = 'text-white' }) {
   const CardIcon = icon;
 
@@ -169,4 +171,168 @@ function StatCard({ icon, iconClassName, label, value, unit, valueClassName = 't
       </div>
     </div>
   );
+}
+
+function ProgressTooltip({ active, label, payload, isAllUsers }) {
+  if (!active || !payload?.length) return null;
+
+  const items = payload
+    .filter((item) => item.value != null)
+    .map((item) => buildTooltipItem(item, isAllUsers));
+
+  if (items.length === 0) return null;
+
+  return (
+    <div className="min-w-56 max-w-72 rounded-xl border border-slate-700 bg-slate-950 px-4 py-3 shadow-2xl text-left">
+      <p className="text-xs font-mono text-slate-400 mb-3">{label}</p>
+      <div className="space-y-3">
+        {items.map((item) => (
+          <div key={item.key} className="space-y-2 border-t border-slate-800 first:border-t-0 first:pt-0 pt-3">
+            <p className="text-xs font-bold uppercase tracking-wider text-emerald-400">Mejor Serie(s)</p>
+            {isAllUsers && <p className="text-sm font-bold text-white">{item.user}</p>}
+            <div className="space-y-1">
+              {item.bestSets.map((set) => (
+                <p key={set.id} className="text-sm text-slate-200">
+                  <span className="font-black text-white">{set.sets}</span>
+                  <span className="text-slate-500"> series x </span>
+                  <span className="font-black text-white">{set.reps}</span>
+                  <span className="text-slate-500"> reps x </span>
+                  <span className="font-black text-emerald-400">{set.weight} kg</span>
+                </p>
+              ))}
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function ProgressDataTable({ chartData, chartUsers, isAllUsers, onOpenRecordsWorkout }) {
+  const rows = buildProgressTableRows(chartData, chartUsers, isAllUsers);
+
+  return (
+    <section className="bg-slate-900 border border-slate-800 rounded-3xl overflow-hidden shadow-xl">
+      <div className="p-5 border-b border-slate-800 flex items-center justify-between gap-3">
+        <div>
+          <h2 className="text-lg font-bold text-white">Datos del gráfico</h2>
+          <p className="text-sm text-slate-400 mt-1">Mejores series por fecha. Usa Ver para abrir el entreno en Registros.</p>
+        </div>
+        <span className="text-xs font-mono text-slate-400 bg-slate-950 border border-slate-800 rounded-full px-3 py-1">{rows.length} filas</span>
+      </div>
+
+      <div className="overflow-x-auto">
+        <table className="w-full text-left min-w-[720px]">
+          <thead className="bg-slate-950 text-slate-500 uppercase text-xs tracking-wider font-bold">
+            <tr>
+              <th className="p-4">Fecha</th>
+              {isAllUsers && <th className="p-4">Usuario</th>}
+              <th className="p-4">Mejor Serie(s)</th>
+              <th className="p-4 text-right">Peso máx.</th>
+              <th className="p-4 text-center">Entreno</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-slate-800/50 text-sm">
+            {rows.map((row) => (
+              <tr key={row.key} className="hover:bg-slate-800/30 transition-colors">
+                <td className="p-4 text-slate-400 font-mono whitespace-nowrap">{row.date}</td>
+                {isAllUsers && <td className="p-4 text-slate-300 font-bold whitespace-nowrap">{row.user}</td>}
+                <td className="p-4 text-slate-200">
+                  <div className="space-y-1">
+                    {row.bestSets.map((set) => (
+                      <p key={set.id}>
+                        <span className="font-black text-white">{set.sets}</span>
+                        <span className="text-slate-500"> series x </span>
+                        <span className="font-black text-white">{set.reps}</span>
+                        <span className="text-slate-500"> reps x </span>
+                        <span className="font-black text-emerald-400">{set.weight} kg</span>
+                      </p>
+                    ))}
+                  </div>
+                </td>
+                <td className="p-4 text-right text-emerald-400 font-black whitespace-nowrap">{row.maxWeight} kg</td>
+                <td className="p-4 text-center">
+                  <button
+                    type="button"
+                    onClick={() => onOpenRecordsWorkout(row.workout)}
+                    className="bg-emerald-500 hover:bg-emerald-400 text-slate-950 px-4 py-2 rounded-lg text-xs font-black inline-flex items-center gap-2"
+                  >
+                    <Eye size={14} /> Ver
+                  </button>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </section>
+  );
+}
+
+function buildProgressTableRows(chartData, chartUsers, isAllUsers) {
+  if (!isAllUsers) {
+    return chartData.map((point) => {
+      const bestSets = point.bestSets || [];
+      const firstBestSet = bestSets[0] || point;
+
+      return {
+        key: `${point.workoutKey}-${point.date}`,
+        date: point.date,
+        user: point.user,
+        bestSets,
+        maxWeight: point.weight,
+        workout: {
+          workoutKey: point.workoutKey,
+          user: point.user,
+          date: firstBestSet.date || point.date,
+          dayLabel: firstBestSet.dayLabel,
+          exercise: firstBestSet.exercise,
+        },
+      };
+    });
+  }
+
+  return chartData.flatMap((point) => chartUsers
+    .filter((user) => point[user] != null)
+    .map((user) => {
+      const bestSets = point[`${user}__bestSets`] || [];
+      const firstBestSet = bestSets[0] || {};
+      const workoutKey = point[`${user}__workoutKey`];
+
+      return {
+        key: `${workoutKey}-${user}-${point.date}`,
+        date: point.date,
+        user,
+        bestSets,
+        maxWeight: point[user],
+        workout: {
+          workoutKey,
+          user,
+          date: firstBestSet.date || point.date,
+          dayLabel: firstBestSet.dayLabel,
+          exercise: firstBestSet.exercise,
+        },
+      };
+    }));
+}
+
+function buildTooltipItem(item, isAllUsers) {
+  const payload = item.payload || {};
+  const user = isAllUsers ? item.name : payload.user;
+  const bestSets = isAllUsers ? payload[`${item.name}__bestSets`] || [] : payload.bestSets || [];
+  const firstBestSet = bestSets[0] || payload;
+  const workoutKey = isAllUsers ? payload[`${item.name}__workoutKey`] : payload.workoutKey;
+
+  return {
+    key: `${user}-${payload.date}-${workoutKey || item.dataKey}`,
+    user,
+    bestSets,
+    workout: {
+      workoutKey,
+      user,
+      date: firstBestSet.date || payload.date,
+      dayLabel: firstBestSet.dayLabel,
+      exercise: firstBestSet.exercise,
+    },
+  };
 }

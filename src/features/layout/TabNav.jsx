@@ -1,12 +1,13 @@
-import { BarChart3, CalendarDays, Database, PlusCircle, TrendingUp } from 'lucide-react';
+import { BarChart3, CalendarDays, ClipboardList, Database, PlusCircle, TrendingUp } from 'lucide-react';
 
-const tabs = ['progress', 'general', 'calendar', 'training', 'exercises'];
+const tabs = ['progress', 'general', 'calendar', 'training', 'records', 'exercises'];
 
 const activeClasses = {
   progress: 'bg-emerald-500 text-slate-950',
   general: 'bg-cyan-500 text-slate-950',
   calendar: 'bg-emerald-500 text-slate-950',
   training: 'bg-emerald-500 text-slate-950',
+  records: 'bg-cyan-500 text-slate-950',
   exercises: 'bg-purple-500 text-slate-950',
 };
 
@@ -26,8 +27,9 @@ export default function TabNav({ activeTab, onTabChange }) {
             {tab === 'general' && <BarChart3 size={16} strokeWidth={2.5} />}
             {tab === 'calendar' && <CalendarDays size={16} strokeWidth={2.5} />}
             {tab === 'training' && <PlusCircle size={16} strokeWidth={2.5} />}
+            {tab === 'records' && <ClipboardList size={16} strokeWidth={2.5} />}
             {tab === 'exercises' && <Database size={16} strokeWidth={2.5} />}
-            {tab === 'general' ? 'General' : tab === 'calendar' ? 'Calendario' : tab === 'training' ? 'Añadir' : tab}
+            {tab === 'general' ? 'General' : tab === 'calendar' ? 'Calendario' : tab === 'training' ? 'Añadir' : tab === 'records' ? 'Registros' : tab}
           </button>
         ))}
       </div>

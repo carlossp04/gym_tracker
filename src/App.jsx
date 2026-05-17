@@ -11,6 +11,7 @@ import MergeExerciseModal from './features/exercises/MergeExerciseModal';
 import RenameExerciseModal from './features/exercises/RenameExerciseModal';
 import TrainingEditModal from './features/training/TrainingEditModal';
 import TrainingInputPanel from './features/training/TrainingInputPanel';
+import TrainingRecordsTab from './features/training/TrainingRecordsTab';
 import {
   applyEntryEdits,
   applyExerciseAliases,
@@ -77,6 +78,7 @@ export default function GymTracker() {
   const [entryEdits, setEntryEdits] = useState({});
   const [editingEntry, setEditingEntry] = useState(null);
   const [editForm, setEditForm] = useState(null);
+  const [recordsFocus, setRecordsFocus] = useState(null);
 
   const editedData = useMemo(() => applyEntryEdits(parsedData, entryEdits), [parsedData, entryEdits]);
   const processedData = useMemo(() => applyExerciseAliases(editedData, aliases), [editedData, aliases]);
@@ -325,6 +327,7 @@ export default function GymTracker() {
     setNewTrainingText('');
     setEditingEntry(null);
     setEditForm(null);
+    setRecordsFocus(null);
     setPassword('');
     setRememberDevice(false);
     setActiveTab('progress');
@@ -413,6 +416,11 @@ export default function GymTracker() {
     });
   };
 
+  const openRecordsWorkout = (workout) => {
+    setRecordsFocus(workout);
+    setActiveTab('records');
+  };
+
   const performTrainingEdit = async () => {
     if (!editingEntry || !editForm) return;
 
@@ -487,11 +495,17 @@ export default function GymTracker() {
             newTrainingText={newTrainingText}
             saveStatus={saveStatus}
             saveMessage={saveMessage}
-            trainingEntries={trainingEntries}
             onNewTrainingTextChange={setNewTrainingText}
             onAppendTraining={appendTraining}
             onExportEncrypted={exportVault}
             onImportEncrypted={importVault}
+          />
+        )}
+
+        {activeTab === 'records' && (
+          <TrainingRecordsTab
+            trainingEntries={trainingEntries}
+            focusedWorkout={recordsFocus}
             onOpenTrainingEdit={openTrainingEditModal}
           />
         )}
@@ -521,6 +535,7 @@ export default function GymTracker() {
             chartData={chartData}
             onUserChange={handleUserChange}
             onExerciseChange={setSelectedExercise}
+            onOpenRecordsWorkout={openRecordsWorkout}
           />
         )}
 
