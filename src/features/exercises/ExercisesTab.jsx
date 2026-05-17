@@ -1,5 +1,4 @@
 import { Check, CheckCircle2, Database, GitMerge, Pencil } from 'lucide-react';
-import { truncateText } from '../../lib/gymMetrics';
 
 export default function ExercisesTab({
   allUniqueExercises,
@@ -31,7 +30,7 @@ export default function ExercisesTab({
             <thead className="bg-slate-950 text-slate-500 uppercase text-xs tracking-wider font-bold">
               <tr>
                 <th className="p-4 w-12 text-center"><CheckCircle2 size={16} /></th>
-                <th className="p-6">Nombre del Ejercicio</th>
+                <th className="p-6 w-1 whitespace-nowrap">Nombre del Ejercicio</th>
                 <th className="p-6 text-right">1RM estimado</th>
                 <th className="p-6 text-center">Acciones</th>
                 <th className="p-6 text-right">Registros</th>
@@ -50,8 +49,8 @@ export default function ExercisesTab({
                         {isSelected && <Check size={14} className="text-white" />}
                       </div>
                     </td>
-                    <td className="p-6 font-bold text-slate-200 group-hover:text-white cursor-pointer max-w-[150px] sm:max-w-[300px] truncate" onClick={() => onToggleSelection(exercise)} title={exercise}>
-                      {truncateText(exercise)}
+                    <td className="p-6 font-bold text-slate-200 group-hover:text-white cursor-pointer whitespace-nowrap" onClick={() => onToggleSelection(exercise)} title={exercise}>
+                      {exercise}
                     </td>
                     <td className="p-6 text-right cursor-pointer" onClick={() => onToggleSelection(exercise)}>
                       {summary ? (

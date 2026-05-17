@@ -227,7 +227,7 @@ function ProgressDataTable({ chartData, chartUsers, isAllUsers, onOpenRecordsWor
             <tr>
               <th className="p-4">Fecha</th>
               {isAllUsers && <th className="p-4">Usuario</th>}
-              <th className="p-4">Mejor Serie(s)</th>
+              <th className="p-4 w-1 whitespace-nowrap">Mejor Serie(s)</th>
               <th className="p-4 text-right">Peso máx.</th>
               <th className="p-4 text-center">Entreno</th>
             </tr>
@@ -237,7 +237,7 @@ function ProgressDataTable({ chartData, chartUsers, isAllUsers, onOpenRecordsWor
               <tr key={row.key} className="hover:bg-slate-800/30 transition-colors">
                 <td className="p-4 text-slate-400 font-mono whitespace-nowrap">{row.date}</td>
                 {isAllUsers && <td className="p-4 text-slate-300 font-bold whitespace-nowrap">{row.user}</td>}
-                <td className="p-4 text-slate-200">
+                <td className="p-4 text-slate-200 w-1 whitespace-nowrap">
                   <div className="space-y-1">
                     {row.bestSets.map((set) => (
                       <p key={set.id}>

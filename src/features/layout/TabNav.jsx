@@ -14,12 +14,12 @@ const activeClasses = {
 export default function TabNav({ activeTab, onTabChange }) {
   return (
     <div className="flex justify-start md:justify-center mb-6 overflow-x-auto no-scrollbar">
-      <div className="bg-slate-900 p-1 rounded-xl border border-slate-800 inline-flex min-w-fit">
+      <div className="bg-slate-900 p-1.5 rounded-xl border border-slate-800 inline-flex min-w-fit">
         {tabs.map((tab) => (
           <button
             key={tab}
             onClick={() => onTabChange(tab)}
-            className={`px-4 sm:px-6 py-2 rounded-lg text-sm font-bold transition-all flex items-center gap-2 capitalize ${
+            className={`px-4 sm:px-6 py-3 rounded-lg text-sm font-bold transition-all flex items-center gap-2 capitalize ${
               activeTab === tab ? `${activeClasses[tab]} shadow-lg` : 'text-slate-400 hover:text-white'
             }`}
           >
