@@ -5,10 +5,13 @@ export default function AuthScreen({
   isRemoteStorage,
   vaultId,
   password,
+  rememberDevice,
   isUnlocking,
+  isCheckingRememberedDevice,
   authError,
   onVaultIdChange,
   onPasswordChange,
+  onRememberDeviceChange,
   onSubmit,
   onResetVault,
 }) {
@@ -42,6 +45,7 @@ export default function AuthScreen({
                 type="text"
                 value={vaultId}
                 onChange={(event) => onVaultIdChange(event.target.value)}
+                disabled={isCheckingRememberedDevice || isUnlocking}
                 className="w-full bg-slate-950 border border-slate-700 rounded-xl px-4 py-4 text-white focus:ring-2 focus:ring-emerald-500 outline-none"
                 placeholder="entrenamientos"
                 autoComplete="username"
@@ -57,12 +61,27 @@ export default function AuthScreen({
               type="password"
               value={password}
               onChange={(event) => onPasswordChange(event.target.value)}
+              disabled={isCheckingRememberedDevice || isUnlocking}
               className="w-full bg-slate-950 border border-slate-700 rounded-xl px-4 py-4 text-white focus:ring-2 focus:ring-emerald-500 outline-none"
               autoFocus
               minLength={6}
               placeholder="Mínimo 6 caracteres"
               autoComplete="current-password"
             />
+          </label>
+
+          <label className="flex items-start gap-3 rounded-xl border border-slate-800 bg-slate-950/70 p-3 text-sm text-slate-300">
+            <input
+              type="checkbox"
+              checked={rememberDevice}
+              onChange={(event) => onRememberDeviceChange(event.target.checked)}
+              disabled={isCheckingRememberedDevice || isUnlocking}
+              className="mt-1 h-4 w-4 rounded border-slate-600 bg-slate-950 text-emerald-500 focus:ring-emerald-500"
+            />
+            <span>
+              <span className="block font-bold text-slate-200">Recordar este dispositivo</span>
+              <span className="block text-xs text-slate-500">No guarda la contraseña. Permite abrir este vault en este navegador sin volver a introducirla.</span>
+            </span>
           </label>
 
           {authError && (
@@ -72,11 +91,11 @@ export default function AuthScreen({
           )}
 
           <button
-            disabled={isUnlocking || password.length < 6 || (isRemoteStorage && !vaultId.trim())}
+            disabled={isCheckingRememberedDevice || isUnlocking || password.length < 6 || (isRemoteStorage && !vaultId.trim())}
             className="w-full bg-emerald-500 hover:bg-emerald-400 disabled:bg-slate-800 disabled:text-slate-600 disabled:cursor-not-allowed text-slate-950 font-black py-4 rounded-xl transition-all flex items-center justify-center gap-2"
           >
             {isRemoteStorage ? <Cloud size={20} /> : hasVault ? <ShieldCheck size={20} /> : <Database size={20} />}
-            {isUnlocking ? 'Procesando...' : isRemoteStorage ? 'Abrir Vault' : hasVault ? 'Desbloquear' : 'Crear y Entrar'}
+            {isCheckingRememberedDevice ? 'Comprobando dispositivo...' : isUnlocking ? 'Procesando...' : isRemoteStorage ? 'Abrir Vault' : hasVault ? 'Desbloquear' : 'Crear y Entrar'}
           </button>
         </form>
 

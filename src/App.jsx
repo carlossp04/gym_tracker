@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { initialTrainingText, userColors } from './constants/appConstants';
 import AuthScreen from './features/auth/AuthScreen';
 import AppHeader from './features/layout/AppHeader';
@@ -29,14 +29,18 @@ import {
   createEncryptedVault,
   deleteEncryptedVault,
   exportEncryptedVault,
+  forgetRememberedVaultKey,
+  getRememberedVaultKey,
   getSavedVaultId,
   hasEncryptedVault,
   isRemoteStorageEnabled,
+  rememberVaultKey,
   replaceEncryptedVault,
   remoteVaultExists,
   saveEncryptedVault,
   saveVaultId,
   unlockEncryptedVault,
+  unlockEncryptedVaultWithKey,
 } from './lib/secureStorage';
 import { normalizeChatText, parseWhatsAppChat, validateParsedData } from './lib/whatsappParser';
 
@@ -48,9 +52,12 @@ export default function GymTracker() {
   const [cryptoKey, setCryptoKey] = useState(null);
   const [isUnlocked, setIsUnlocked] = useState(false);
   const [vaultId, setVaultId] = useState(() => getSavedVaultId());
+  const [initialAutoUnlockVaultId] = useState(() => getSavedVaultId());
   const [isRemoteStorage] = useState(() => isRemoteStorageEnabled());
   const [hasVault, setHasVault] = useState(() => hasEncryptedVault());
   const [password, setPassword] = useState('');
+  const [rememberDevice, setRememberDevice] = useState(false);
+  const [isCheckingRememberedDevice, setIsCheckingRememberedDevice] = useState(true);
   const [isUnlocking, setIsUnlocking] = useState(false);
   const [authError, setAuthError] = useState('');
   const [newTrainingText, setNewTrainingText] = useState('');
@@ -101,7 +108,7 @@ export default function GymTracker() {
     }
   }, [progressExerciseOptions, selectedExercise]);
 
-  const loadTrainingPayload = (payload, key) => {
+  const loadTrainingPayload = useCallback((payload, key) => {
     const cleanText = normalizeChatText(payload.trainingText || '');
     const parsed = parseWhatsAppChat(cleanText);
     const { isValid } = validateParsedData(parsed);
@@ -119,6 +126,54 @@ export default function GymTracker() {
     setAuthError('');
     setSaveStatus('idle');
     setSaveMessage('');
+  }, []);
+
+  useEffect(() => {
+    let isCancelled = false;
+
+    const unlockRememberedDevice = async () => {
+      const cleanVaultId = initialAutoUnlockVaultId.trim();
+
+      try {
+        setIsCheckingRememberedDevice(true);
+        const rememberedKey = await getRememberedVaultKey(cleanVaultId);
+        if (!rememberedKey || isCancelled) return;
+
+        setIsUnlocking(true);
+        const result = await unlockEncryptedVaultWithKey(rememberedKey, cleanVaultId);
+        if (!result || isCancelled) return;
+
+        loadTrainingPayload(result.payload, result.key);
+        setRememberDevice(true);
+      } catch {
+        try {
+          await forgetRememberedVaultKey(cleanVaultId);
+        } catch {
+          // Ignore cleanup errors; the normal password flow remains available.
+        }
+      } finally {
+        if (!isCancelled) {
+          setIsUnlocking(false);
+          setIsCheckingRememberedDevice(false);
+        }
+      }
+    };
+
+    unlockRememberedDevice();
+
+    return () => {
+      isCancelled = true;
+    };
+  }, [initialAutoUnlockVaultId, loadTrainingPayload]);
+
+  const rememberCurrentVaultKey = async (cleanVaultId, key) => {
+    if (!rememberDevice) return;
+
+    try {
+      await rememberVaultKey(cleanVaultId, key);
+    } catch {
+      // Remembering the device is optional; successful password unlock should still proceed.
+    }
   };
 
   const handleUnlock = async (event) => {
@@ -136,6 +191,7 @@ export default function GymTracker() {
         const exists = await remoteVaultExists(cleanVaultId);
         if (exists) {
           const { key, payload } = await unlockEncryptedVault(password, cleanVaultId);
+          await rememberCurrentVaultKey(cleanVaultId, key);
           loadTrainingPayload(payload, key);
         } else {
           const payload = {
@@ -144,11 +200,13 @@ export default function GymTracker() {
             entryEdits: {},
           };
           const { key } = await createEncryptedVault(password, payload, cleanVaultId);
+          await rememberCurrentVaultKey(cleanVaultId, key);
           setHasVault(true);
           loadTrainingPayload(payload, key);
         }
       } else if (hasVault) {
         const { key, payload } = await unlockEncryptedVault(password);
+        await rememberCurrentVaultKey(cleanVaultId, key);
         loadTrainingPayload(payload, key);
       } else {
         const payload = {
@@ -157,6 +215,7 @@ export default function GymTracker() {
           entryEdits: {},
         };
         const { key } = await createEncryptedVault(password, payload);
+        await rememberCurrentVaultKey(cleanVaultId, key);
         setHasVault(true);
         loadTrainingPayload(payload, key);
       }
@@ -173,7 +232,7 @@ export default function GymTracker() {
 
     try {
       await deleteEncryptedVault(vaultId.trim());
-      lockApp();
+      await lockApp();
       setHasVault(false);
       setAuthError('Vault borrado. Introduce contraseña nueva para crear base desde export inicial.');
     } catch {
@@ -245,7 +304,7 @@ export default function GymTracker() {
     try {
       const text = await file.text();
       await replaceEncryptedVault(text, vaultId.trim());
-      lockApp();
+      await lockApp();
       setHasVault(true);
       setAuthError('Backup importado. Introduce contraseña para desbloquear.');
     } catch (error) {
@@ -256,7 +315,13 @@ export default function GymTracker() {
     }
   };
 
-  const lockApp = () => {
+  const lockApp = async () => {
+    try {
+      await forgetRememberedVaultKey(vaultId.trim());
+    } catch {
+      // Locking must still clear in-memory data even if IndexedDB is unavailable.
+    }
+
     setIsUnlocked(false);
     setCryptoKey(null);
     setParsedData(null);
@@ -268,6 +333,7 @@ export default function GymTracker() {
     setEditingEntry(null);
     setEditForm(null);
     setPassword('');
+    setRememberDevice(false);
     setActiveTab('progress');
   };
 
@@ -403,10 +469,13 @@ export default function GymTracker() {
         isRemoteStorage={isRemoteStorage}
         vaultId={vaultId}
         password={password}
+        rememberDevice={rememberDevice}
         isUnlocking={isUnlocking}
+        isCheckingRememberedDevice={isCheckingRememberedDevice}
         authError={authError}
         onVaultIdChange={setVaultId}
         onPasswordChange={setPassword}
+        onRememberDeviceChange={setRememberDevice}
         onSubmit={handleUnlock}
         onResetVault={resetVaultToInitialSeed}
       />

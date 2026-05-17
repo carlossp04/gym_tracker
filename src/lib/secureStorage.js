@@ -2,6 +2,8 @@ import { createClient } from '@supabase/supabase-js';
 
 const STORAGE_KEY = 'gym-tracker.encrypted-vault.v1';
 const VAULT_ID_KEY = 'gym-tracker.last-vault-id.v1';
+const REMEMBERED_KEYS_DB = 'gym-tracker.remembered-keys.v1';
+const REMEMBERED_KEYS_STORE = 'vault-keys';
 const DEFAULT_VAULT_ID = 'entrenamientos';
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
 const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
@@ -55,6 +57,17 @@ export async function unlockEncryptedVault(password, vaultId) {
   };
 }
 
+export async function unlockEncryptedVaultWithKey(key, vaultId) {
+  const record = supabase ? await fetchRemoteRecord(vaultId) : readRecord();
+  if (!record) return null;
+  writeLocalRecord(record);
+
+  return {
+    key,
+    payload: await decryptRecord(record, key),
+  };
+}
+
 export async function saveEncryptedVault(key, payload, existingSalt, vaultId) {
   const currentRecord = readRecord();
   const salt = existingSalt || base64ToBytes(currentRecord.salt);
@@ -92,9 +105,58 @@ export async function replaceEncryptedVault(serializedVault, vaultId) {
 
 export async function deleteEncryptedVault(vaultId) {
   localStorage.removeItem(STORAGE_KEY);
+  try {
+    await forgetRememberedVaultKey(vaultId);
+  } catch {
+    // Deleting the encrypted payload should not depend on remembered-device cleanup.
+  }
+
   if (supabase) {
     throw new Error(`No se permite borrar vault remoto desde cliente: ${vaultId}`);
   }
+}
+
+export async function rememberVaultKey(vaultId, key) {
+  const db = await openRememberedKeysDb();
+  return new Promise((resolve, reject) => {
+    const request = db
+      .transaction(REMEMBERED_KEYS_STORE, 'readwrite')
+      .objectStore(REMEMBERED_KEYS_STORE)
+      .put({
+        vaultId: normalizeVaultId(vaultId),
+        key,
+        updatedAt: new Date().toISOString(),
+      });
+
+    request.onsuccess = () => resolve();
+    request.onerror = () => reject(request.error);
+  });
+}
+
+export async function getRememberedVaultKey(vaultId) {
+  const db = await openRememberedKeysDb();
+  return new Promise((resolve, reject) => {
+    const request = db
+      .transaction(REMEMBERED_KEYS_STORE, 'readonly')
+      .objectStore(REMEMBERED_KEYS_STORE)
+      .get(normalizeVaultId(vaultId));
+
+    request.onsuccess = () => resolve(request.result?.key || null);
+    request.onerror = () => reject(request.error);
+  });
+}
+
+export async function forgetRememberedVaultKey(vaultId) {
+  const db = await openRememberedKeysDb();
+  return new Promise((resolve, reject) => {
+    const request = db
+      .transaction(REMEMBERED_KEYS_STORE, 'readwrite')
+      .objectStore(REMEMBERED_KEYS_STORE)
+      .delete(normalizeVaultId(vaultId));
+
+    request.onsuccess = () => resolve();
+    request.onerror = () => reject(request.error);
+  });
 }
 
 async function deriveKey(password, salt) {
@@ -113,9 +175,33 @@ async function deriveKey(password, salt) {
   );
 }
 
+async function decryptRecord(record, key) {
+  const iv = base64ToBytes(record.iv);
+  const ciphertext = base64ToBytes(record.ciphertext);
+  const plaintext = await crypto.subtle.decrypt({ name: 'AES-GCM', iv }, key, ciphertext);
+  return JSON.parse(decoder.decode(plaintext));
+}
+
 function readRecord() {
   const raw = localStorage.getItem(STORAGE_KEY);
   return raw ? JSON.parse(raw) : null;
+}
+
+function normalizeVaultId(vaultId) {
+  return vaultId?.trim() || DEFAULT_VAULT_ID;
+}
+
+function openRememberedKeysDb() {
+  return new Promise((resolve, reject) => {
+    const request = indexedDB.open(REMEMBERED_KEYS_DB, 1);
+
+    request.onupgradeneeded = () => {
+      request.result.createObjectStore(REMEMBERED_KEYS_STORE, { keyPath: 'vaultId' });
+    };
+
+    request.onsuccess = () => resolve(request.result);
+    request.onerror = () => reject(request.error);
+  });
 }
 
 function writeLocalRecord(record) {
