@@ -19,7 +19,7 @@ export default function TabNav({ activeTab, onTabChange }) {
           <button
             key={tab}
             onClick={() => onTabChange(tab)}
-            className={`px-4 sm:px-6 py-3 rounded-lg text-sm font-bold transition-all flex items-center gap-2 capitalize ${
+            className={`px-5 sm:px-8 py-3 rounded-lg text-sm font-bold transition-all flex items-center gap-2 capitalize ${
               activeTab === tab ? `${activeClasses[tab]} shadow-lg` : 'text-slate-400 hover:text-white'
             }`}
           >
