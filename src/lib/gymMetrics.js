@@ -88,15 +88,38 @@ export function getProgressChartData(processedData, selectedUser, selectedExerci
 
   return Object.entries(groupedByDate).map(([date, entries]) => {
     const maxWeight = Math.max(...entries.map((entry) => entry.weight));
-    const bestSets = entries.filter((entry) => entry.weight === maxWeight);
-    const representative = bestSets[0];
+    const maxOneRepMax = Math.max(...entries.map((entry) => entry.oneRepMax ?? estimateOneRepMax(entry.weight, entry.reps)));
+    const totalSets = entries.reduce((sum, entry) => sum + entry.sets, 0);
+    const averageWeight = roundToOneDecimal(
+      totalSets > 0
+        ? entries.reduce((sum, entry) => sum + entry.sets * entry.weight, 0) / totalSets
+        : 0,
+    );
+    const averageReps = roundToOneDecimal(
+      totalSets > 0
+        ? entries.reduce((sum, entry) => sum + entry.sets * entry.reps, 0) / totalSets
+        : entries[0]?.reps || 0,
+    );
+    const representative = entries.find((entry) => entry.weight === maxWeight) || entries[0];
+    const averageSet = {
+      ...representative,
+      id: `${selectedUser}-${date}-average`,
+      sets: totalSets,
+      reps: averageReps,
+      weight: averageWeight,
+    };
 
     return {
       ...representative,
       date,
-      weight: maxWeight,
-      reps: representative.reps,
-      bestSets,
+      weight: averageWeight,
+      reps: averageReps,
+      oneRepMax: estimateOneRepMax(averageWeight, averageReps),
+      maxWeight,
+      maxOneRepMax,
+      totalSets,
+      averageSet,
+      bestSets: [averageSet],
       workoutKey: buildWorkoutKey(selectedUser, representative.date, representative.dayLabel),
     };
   });
@@ -242,8 +265,8 @@ export function getExerciseOneRepMaxSummaries(processedData) {
 export function getStats(chartData) {
   if (chartData.length === 0) return null;
 
-  const maxWeight = Math.max(...chartData.map((entry) => entry.weight));
-  const maxOneRepMax = Math.max(...chartData.map((entry) => entry.oneRepMax ?? estimateOneRepMax(entry.weight, entry.reps)));
+  const maxWeight = Math.max(...chartData.map((entry) => entry.maxWeight ?? entry.weight));
+  const maxOneRepMax = Math.max(...chartData.map((entry) => entry.maxOneRepMax ?? entry.oneRepMax ?? estimateOneRepMax(entry.weight, entry.reps)));
   const startWeight = chartData[0].weight;
   const currentWeight = chartData[chartData.length - 1].weight;
   const improvement = startWeight === 0 ? 0 : ((currentWeight - startWeight) / startWeight) * 100;
@@ -271,6 +294,10 @@ function cleanTextValue(value) {
 function normalizePositiveNumber(value, fallback) {
   const numericValue = Number(value);
   return Number.isFinite(numericValue) && numericValue > 0 ? numericValue : fallback;
+}
+
+function roundToOneDecimal(value) {
+  return Math.round(value * 10) / 10;
 }
 
 function parseChatDate(date) {

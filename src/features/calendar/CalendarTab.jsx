@@ -6,7 +6,7 @@ const ALL_USERS_OPTION = 'Todos los usuarios';
 const weekDays = ['L', 'M', 'X', 'J', 'V', 'S', 'D'];
 const monthFormatter = new Intl.DateTimeFormat('es-ES', { month: 'long', year: 'numeric' });
 
-export default function CalendarTab({ processedData, availableUsers, userColors }) {
+export default function CalendarTab({ processedData, availableUsers, userColors, onOpenRecordsDay }) {
   const [selectedUser, setSelectedUser] = useState(ALL_USERS_OPTION);
   const [selectedMonthKey, setSelectedMonthKey] = useState('');
 
@@ -78,6 +78,7 @@ export default function CalendarTab({ processedData, availableUsers, userColors 
               color={color}
               month={selectedMonth}
               trainedDays={trainedDays}
+              onOpenRecordsDay={onOpenRecordsDay}
             />
           );
         })}
@@ -86,7 +87,7 @@ export default function CalendarTab({ processedData, availableUsers, userColors 
   );
 }
 
-function UserCalendar({ user, color, month, trainedDays }) {
+function UserCalendar({ user, color, month, trainedDays, onOpenRecordsDay }) {
   const weeks = buildMonthGrid(month);
   const trainedCount = weeks.flat().filter((day) => day.inMonth && trainedDays.has(toDateKey(day.date))).length;
 
@@ -117,16 +118,19 @@ function UserCalendar({ user, color, month, trainedDays }) {
           const trained = day.inMonth && trainedDays.has(dateKey);
 
           return (
-            <div
+            <button
+              type="button"
               key={dateKey}
-              className={`w-full aspect-square rounded-lg border flex items-center justify-center text-xs font-bold ${
+              onClick={() => day.inMonth && onOpenRecordsDay({ user, date: dateKey })}
+              disabled={!day.inMonth}
+              className={`w-full aspect-square rounded-lg border flex items-center justify-center text-xs font-bold transition-colors ${
                 day.inMonth ? 'border-slate-800 text-slate-300 bg-slate-950' : 'border-slate-900 text-slate-700 bg-slate-950/40'
-              }`}
+              } ${day.inMonth ? 'hover:border-emerald-400 cursor-pointer' : 'cursor-default'}`}
               style={trained ? { backgroundColor: color, borderColor: color, color: '#020617' } : undefined}
-              title={trained ? `${user} entrenó el ${dateKey}` : dateKey}
+              title={trained ? `Ver registros de ${user} el ${dateKey}` : dateKey}
             >
               {day.date.getDate()}
-            </div>
+            </button>
           );
         })}
       </div>

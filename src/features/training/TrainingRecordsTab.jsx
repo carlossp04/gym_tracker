@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react';
 import { CalendarDays, FilterX, ListX, Pencil, Search, SquarePen, Trash2, X } from 'lucide-react';
+import { normalizeSearchText } from '../../lib/textSearch';
 
 const ALL_OPTIONS = 'Todos';
 
@@ -26,14 +27,14 @@ export default function TrainingRecordsTab({
   );
 
   const filteredEntries = useMemo(() => {
-    const searchTerm = filters.search.trim().toLowerCase();
+    const searchTerm = normalizeSearchText(filters.search);
     const fromDate = filters.fromDate ? parseDateInput(filters.fromDate) : null;
     const toDate = filters.toDate ? parseDateInput(filters.toDate) : null;
 
     return trainingEntries.filter((entry) => {
       const entryDate = parseTrainingDate(entry.date);
       const matchesSearch = !searchTerm || [entry.user, entry.exercise, entry.dayLabel, entry.date]
-        .some((value) => String(value || '').toLowerCase().includes(searchTerm));
+        .some((value) => normalizeSearchText(value).includes(searchTerm));
       const matchesUser = filters.user === ALL_OPTIONS || entry.user === filters.user;
       const matchesExercise = filters.exercise === ALL_OPTIONS || entry.exercise === filters.exercise;
       const matchesFromDate = !fromDate || entryDate >= fromDate;

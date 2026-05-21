@@ -99,7 +99,7 @@ export default function ProgressTab({
                     <Line key={user} type="monotone" dataKey={user} name={user} stroke={userColors[idx % userColors.length]} strokeWidth={3} connectNulls dot={chartData.length < 30 ? { r: 4, fill: '#0f172a', stroke: userColors[idx % userColors.length], strokeWidth: 2 } : false} activeDot={{ r: 6 }} />
                   ))
                 ) : (
-                  <Line type="monotone" dataKey="weight" name="Mejor Serie(s)" stroke="#10b981" strokeWidth={4} dot={chartData.length < 30 ? { r: 4, fill: '#0f172a', stroke: '#10b981', strokeWidth: 2 } : false} activeDot={{ r: 8, fill: '#10b981' }} />
+                  <Line type="monotone" dataKey="weight" name="Media del día" stroke="#10b981" strokeWidth={4} dot={chartData.length < 30 ? { r: 4, fill: '#0f172a', stroke: '#10b981', strokeWidth: 2 } : false} activeDot={{ r: 8, fill: '#10b981' }} />
                 )}
               </LineChart>
             </ResponsiveContainer>
@@ -188,7 +188,7 @@ function ProgressTooltip({ active, label, payload, isAllUsers }) {
       <div className="space-y-3">
         {items.map((item) => (
           <div key={item.key} className="space-y-2 border-t border-slate-800 first:border-t-0 first:pt-0 pt-3">
-            <p className="text-xs font-bold uppercase tracking-wider text-emerald-400">Mejor Serie(s)</p>
+            <p className="text-xs font-bold uppercase tracking-wider text-emerald-400">{isAllUsers ? 'Mejor Serie(s)' : 'Media del día'}</p>
             {isAllUsers && <p className="text-sm font-bold text-white">{item.user}</p>}
             <div className="space-y-1">
               {item.bestSets.map((set) => (
@@ -216,7 +216,7 @@ function ProgressDataTable({ chartData, chartUsers, isAllUsers, onOpenRecordsWor
       <div className="p-5 border-b border-slate-800 flex items-center justify-between gap-3">
         <div>
           <h2 className="text-lg font-bold text-white">Datos del gráfico</h2>
-          <p className="text-sm text-slate-400 mt-1">Mejores series por fecha. Usa Ver para abrir el entreno en Registros.</p>
+          <p className="text-sm text-slate-400 mt-1">{isAllUsers ? 'Mejores series por fecha.' : 'Media de peso y total de series por fecha.'} Usa Ver para abrir el entreno en Registros.</p>
         </div>
         <span className="text-xs font-mono text-slate-400 bg-slate-950 border border-slate-800 rounded-full px-3 py-1">{rows.length} filas</span>
       </div>
@@ -227,8 +227,8 @@ function ProgressDataTable({ chartData, chartUsers, isAllUsers, onOpenRecordsWor
             <tr>
               <th className="p-4">Fecha</th>
               {isAllUsers && <th className="p-4">Usuario</th>}
-              <th className="p-4 w-1 whitespace-nowrap">Mejor Serie(s)</th>
-              <th className="p-4 text-right">Peso máx.</th>
+              <th className="p-4 w-1 whitespace-nowrap">{isAllUsers ? 'Mejor Serie(s)' : 'Media del día'}</th>
+              <th className="p-4 text-right">{isAllUsers ? 'Peso máx.' : 'Peso medio'}</th>
               <th className="p-4 text-center">Entreno</th>
             </tr>
           </thead>

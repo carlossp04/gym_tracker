@@ -507,6 +507,11 @@ export default function GymTracker() {
     setActiveTab('records');
   };
 
+  const openRecordsDay = (day) => {
+    setRecordsFocus(day);
+    setActiveTab('records');
+  };
+
   const performTrainingEdit = async () => {
     if (!editingEntry || !editForm) return;
 
@@ -697,6 +702,7 @@ export default function GymTracker() {
             processedData={processedData}
             availableUsers={availableUsers}
             userColors={userColors}
+            onOpenRecordsDay={openRecordsDay}
           />
         )}
 

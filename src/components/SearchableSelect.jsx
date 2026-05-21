@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { Check, ChevronDown, Search } from 'lucide-react';
+import { normalizeSearchText } from '../lib/textSearch';
 
 export default function SearchableSelect({
   options,
@@ -13,8 +14,9 @@ export default function SearchableSelect({
   const [searchTerm, setSearchTerm] = useState('');
   const wrapperRef = useRef(null);
 
+  const normalizedSearchTerm = normalizeSearchText(searchTerm);
   const filteredOptions = options.filter((option) =>
-    option.toLowerCase().includes(searchTerm.toLowerCase()),
+    normalizeSearchText(option).includes(normalizedSearchTerm),
   );
 
   useEffect(() => {
