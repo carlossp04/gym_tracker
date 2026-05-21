@@ -9,7 +9,6 @@ const SIMILARITY_THRESHOLD = 0.84;
 export default function ExercisesTab({
   allUniqueExercises,
   processedData,
-  exerciseSummaries,
   selectedForMerge,
   onToggleSelection,
   onOpenMergeModal,
@@ -86,12 +85,17 @@ export default function ExercisesTab({
       )}
       <div className="bg-slate-900 border border-slate-800 rounded-3xl overflow-hidden shadow-2xl">
         <div className="overflow-x-auto">
-          <table className="w-full text-left min-w-[600px]">
+          <table className="w-full table-fixed text-left min-w-[600px]">
+            <colgroup>
+              <col className="w-14" />
+              <col />
+              <col className="w-28" />
+              <col className="w-36" />
+            </colgroup>
             <thead className="bg-slate-950 text-slate-500 uppercase text-xs tracking-wider font-bold">
               <tr>
-                <th className="p-4 w-12 text-center"><CheckCircle2 size={16} /></th>
-                <th className="p-6 w-1 whitespace-nowrap">Nombre del Ejercicio</th>
-                <th className="p-6 text-right">1RM estimado</th>
+                <th className="p-4 text-center"><CheckCircle2 size={16} /></th>
+                <th className="p-6 whitespace-nowrap">Nombre del Ejercicio</th>
                 <th className="p-6 text-center">Acciones</th>
                 <th className="p-6 text-right">Registros</th>
               </tr>
@@ -100,7 +104,6 @@ export default function ExercisesTab({
               {displayedExercises.map((exercise) => {
                 const count = exerciseCounts[exercise] || 0;
                 const isSelected = selectedForMerge.includes(exercise);
-                const summary = exerciseSummaries[exercise];
                 const similarity = similarityByExercise[exercise];
 
                 return (
@@ -119,16 +122,6 @@ export default function ExercisesTab({
                           </span>
                         )}
                       </div>
-                    </td>
-                    <td className="p-6 text-right cursor-pointer" onClick={() => onToggleSelection(exercise)}>
-                      {summary ? (
-                        <div className="text-right">
-                          <p className="text-emerald-400 font-black whitespace-nowrap">{summary.oneRepMax} kg</p>
-                          <p className="text-[10px] text-slate-500 whitespace-nowrap">{summary.weight}kg x {summary.reps}</p>
-                        </div>
-                      ) : (
-                        <span className="text-slate-600">-</span>
-                      )}
                     </td>
                     <td className="p-6 text-center">
                       <button

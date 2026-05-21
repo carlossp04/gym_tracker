@@ -240,7 +240,10 @@ function ProgressTooltip({ active, label, payload, isAllUsers, weightMode }) {
 function ProgressDataTable({ chartData, chartUsers, isAllUsers, weightMode, onOpenRecordsWorkout }) {
   const rows = buildProgressTableRows(chartData, chartUsers, isAllUsers);
   const modeLabel = weightMode === 'max' ? 'Máximo del día' : 'Media del día';
-  const weightLabel = weightMode === 'max' ? 'Peso máx.' : 'Peso medio';
+  const gridClassName = isAllUsers
+    ? 'md:grid-cols-4'
+    : 'md:grid-cols-3';
+  const mobileMinWidthClassName = isAllUsers ? 'min-w-[560px] md:min-w-0' : 'min-w-[430px] md:min-w-0';
 
   return (
     <section className="bg-slate-900 border border-slate-800 rounded-3xl overflow-hidden shadow-xl">
@@ -253,48 +256,44 @@ function ProgressDataTable({ chartData, chartUsers, isAllUsers, weightMode, onOp
       </div>
 
       <div className="overflow-x-auto">
-        <table className="w-full text-left min-w-[720px]">
-          <thead className="bg-slate-950 text-slate-500 uppercase text-xs tracking-wider font-bold">
-            <tr>
-              <th className="p-4">Fecha</th>
-              {isAllUsers && <th className="p-4">Usuario</th>}
-              <th className="p-4 w-1 whitespace-nowrap">{modeLabel}</th>
-              <th className="p-4 text-right">{weightLabel}</th>
-              <th className="p-4 text-center">Entreno</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-slate-800/50 text-sm">
-            {rows.map((row) => (
-              <tr key={row.key} className="hover:bg-slate-800/30 transition-colors">
-                <td className="p-4 text-slate-400 font-mono whitespace-nowrap">{row.date}</td>
-                {isAllUsers && <td className="p-4 text-slate-300 font-bold whitespace-nowrap">{row.user}</td>}
-                <td className="p-4 text-slate-200 w-1 whitespace-nowrap">
-                  <div className="space-y-1">
-                    {row.bestSets.map((set) => (
-                      <p key={set.id}>
-                        <span className="font-black text-white">{set.sets}</span>
-                        <span className="text-slate-500"> series x </span>
-                        <span className="font-black text-white">{set.reps}</span>
-                        <span className="text-slate-500"> reps x </span>
-                        <span className="font-black text-emerald-400">{set.weight} kg</span>
-                      </p>
-                    ))}
-                  </div>
-                </td>
-                <td className="p-4 text-right text-emerald-400 font-black whitespace-nowrap">{row.maxWeight} kg</td>
-                <td className="p-4 text-center">
-                  <button
-                    type="button"
-                    onClick={() => onOpenRecordsWorkout(row.workout)}
-                    className="bg-emerald-500 hover:bg-emerald-400 text-slate-950 px-4 py-2 rounded-lg text-xs font-black inline-flex items-center gap-2"
-                  >
-                    <Eye size={14} /> Ver
-                  </button>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
+        <div className={`grid grid-cols-[7rem_minmax(13rem,1fr)_6rem] ${gridClassName} ${mobileMinWidthClassName} items-center gap-3 md:gap-4 bg-slate-950 px-4 md:px-5 py-3 text-xs font-bold uppercase tracking-wider text-slate-500`}>
+          <span>Fecha</span>
+          {isAllUsers && <span className="hidden md:block">Usuario</span>}
+          <span>{modeLabel}</span>
+          <span className="text-center">Entreno</span>
+        </div>
+        <div className={`divide-y divide-slate-800/60 text-sm ${mobileMinWidthClassName}`}>
+          {rows.map((row) => (
+            <div
+              key={row.key}
+              className={`grid grid-cols-[7rem_minmax(13rem,1fr)_6rem] ${gridClassName} items-center gap-3 md:gap-4 px-4 md:px-5 py-4 hover:bg-slate-800/30 transition-colors`}
+            >
+              <span className="font-mono text-slate-400 whitespace-nowrap">{row.date}</span>
+              {isAllUsers && <span className="hidden md:block text-slate-300 font-bold whitespace-nowrap truncate">{row.user}</span>}
+              <div className="min-w-0 space-y-1 text-slate-200 whitespace-nowrap">
+                {isAllUsers && <p className="md:hidden text-xs font-bold text-slate-400 truncate">{row.user}</p>}
+                {row.bestSets.map((set) => (
+                  <p key={set.id} className="truncate">
+                    <span className="font-black text-white">{set.sets}</span>
+                    <span className="text-slate-500"> series x </span>
+                    <span className="font-black text-white">{set.reps}</span>
+                    <span className="text-slate-500"> reps x </span>
+                    <span className="font-black text-emerald-400">{set.weight} kg</span>
+                  </p>
+                ))}
+              </div>
+              <div className="flex justify-end md:justify-center">
+                <button
+                  type="button"
+                  onClick={() => onOpenRecordsWorkout(row.workout)}
+                  className="bg-emerald-500 hover:bg-emerald-400 text-slate-950 px-3 sm:px-4 py-2 rounded-lg text-xs font-black inline-flex items-center gap-1.5 sm:gap-2"
+                >
+                  <Eye size={14} /> Ver
+                </button>
+              </div>
+            </div>
+          ))}
+        </div>
       </div>
     </section>
   );
@@ -311,7 +310,6 @@ function buildProgressTableRows(chartData, chartUsers, isAllUsers) {
         date: point.date,
         user: point.user,
         bestSets,
-        maxWeight: point.weight,
         workout: {
           workoutKey: point.workoutKey,
           user: point.user,
@@ -335,7 +333,6 @@ function buildProgressTableRows(chartData, chartUsers, isAllUsers) {
         date: point.date,
         user,
         bestSets,
-        maxWeight: point[user],
         workout: {
           workoutKey,
           user,

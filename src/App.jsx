@@ -18,7 +18,6 @@ import {
   getAllUniqueExercises,
   getAvailableUsers,
   getComparisonChartData,
-  getExerciseOneRepMaxSummaries,
   getGeneralComparisonChartData,
   getGeneralUserSummaries,
   getProgressChartData,
@@ -92,7 +91,6 @@ export default function GymTracker() {
   const availableUsers = useMemo(() => getAvailableUsers(processedData), [processedData]);
   const progressUserOptions = useMemo(() => [ALL_USERS_OPTION, ...availableUsers], [availableUsers]);
   const allUniqueExercises = useMemo(() => getAllUniqueExercises(processedData), [processedData]);
-  const exerciseSummaries = useMemo(() => getExerciseOneRepMaxSummaries(processedData), [processedData]);
   const trainingEntries = useMemo(() => getEditableTrainingEntries(processedData), [processedData]);
   const uniqueUserExercises = useMemo(() => getUserExercises(processedData, selectedUser), [processedData, selectedUser]);
   const isAllUsersSelected = selectedUser === ALL_USERS_OPTION;
@@ -673,7 +671,6 @@ export default function GymTracker() {
           <ExercisesTab
             allUniqueExercises={allUniqueExercises}
             processedData={processedData}
-            exerciseSummaries={exerciseSummaries}
             selectedForMerge={selectedForMerge}
             onToggleSelection={toggleSelection}
             onOpenMergeModal={openMergeModal}
