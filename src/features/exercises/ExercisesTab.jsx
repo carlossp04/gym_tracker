@@ -33,7 +33,7 @@ export default function ExercisesTab({
         </h2>
         <p className="text-slate-400 text-sm">Gestiona nombres de ejercicios (fusionar o renombrar).</p>
       </div>
-      <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-3 bg-slate-900 border border-slate-800 rounded-2xl p-4 shadow-xl">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 bg-slate-900 border border-slate-800 rounded-2xl p-4 shadow-xl">
         <div>
           <p className="text-sm font-bold text-white">Orden de ejercicios</p>
           <p className="text-xs text-slate-500 mt-1">
@@ -42,20 +42,21 @@ export default function ExercisesTab({
               : 'Sin nombres muy similares detectados.'}
           </p>
         </div>
-        <div className="flex bg-slate-950 border border-slate-800 rounded-xl p-1">
+        <div className="grid grid-cols-2 sm:flex bg-slate-950 border border-slate-800 rounded-xl p-1 w-full sm:w-auto">
           <button
             type="button"
             onClick={() => setSortMode(SORT_BY_NAME)}
-            className={`px-4 py-2 rounded-lg text-sm font-bold transition-colors ${sortMode === SORT_BY_NAME ? 'bg-purple-500 text-white' : 'text-slate-400 hover:text-white'}`}
+            className={`min-w-0 px-3 sm:px-4 py-2 rounded-lg text-sm font-bold transition-colors ${sortMode === SORT_BY_NAME ? 'bg-purple-500 text-white' : 'text-slate-400 hover:text-white'}`}
           >
-            Nombre
+            <span className="block truncate">Nombre</span>
           </button>
           <button
             type="button"
             onClick={() => setSortMode(SORT_BY_SIMILARITY)}
-            className={`px-4 py-2 rounded-lg text-sm font-bold transition-colors flex items-center gap-2 ${isSimilaritySort ? 'bg-purple-500 text-white' : 'text-slate-400 hover:text-white'}`}
+            className={`min-w-0 px-3 sm:px-4 py-2 rounded-lg text-sm font-bold transition-colors flex items-center justify-center gap-1.5 ${isSimilaritySort ? 'bg-purple-500 text-white' : 'text-slate-400 hover:text-white'}`}
           >
-            <ArrowUpDown size={16} /> Similitud
+            <ArrowUpDown size={15} className="shrink-0" />
+            <span className="truncate">Similitud</span>
           </button>
         </div>
       </div>
