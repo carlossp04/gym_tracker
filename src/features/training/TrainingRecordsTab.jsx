@@ -325,8 +325,8 @@ function WorkoutGroup({
             <td className="p-4 text-white font-bold max-w-[260px] truncate" title={entry.exercise}>{entry.exercise}</td>
             <td className="p-4 text-right text-slate-300">{entry.sets}</td>
             <td className="p-4 text-right text-slate-300">{entry.reps}</td>
-            <td className="p-4 text-right text-slate-300">{entry.weight}</td>
-            <td className="p-4 text-right text-emerald-400 font-black">{entry.oneRepMax} kg</td>
+            <td className="p-4 text-right text-emerald-400 font-black">{entry.weight}</td>
+            <td className="p-4 text-right text-slate-300">{entry.oneRepMax} kg</td>
             <td className="p-4">
               <div className="flex items-center justify-center gap-1">
                 <button

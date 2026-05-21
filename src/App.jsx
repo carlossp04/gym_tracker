@@ -67,6 +67,7 @@ export default function GymTracker() {
 
   const [selectedUser, setSelectedUser] = useState('');
   const [selectedExercise, setSelectedExercise] = useState('');
+  const [progressWeightMode, setProgressWeightMode] = useState('average');
   const [activeTab, setActiveTab] = useState('progress');
 
   const [aliases, setAliases] = useState({});
@@ -96,8 +97,8 @@ export default function GymTracker() {
   const uniqueUserExercises = useMemo(() => getUserExercises(processedData, selectedUser), [processedData, selectedUser]);
   const isAllUsersSelected = selectedUser === ALL_USERS_OPTION;
   const progressExerciseOptions = isAllUsersSelected ? allUniqueExercises : uniqueUserExercises;
-  const userChartData = useMemo(() => getProgressChartData(processedData, selectedUser, selectedExercise), [processedData, selectedUser, selectedExercise]);
-  const multiUserChartData = useMemo(() => getComparisonChartData(processedData, selectedExercise), [processedData, selectedExercise]);
+  const userChartData = useMemo(() => getProgressChartData(processedData, selectedUser, selectedExercise, progressWeightMode), [processedData, selectedUser, selectedExercise, progressWeightMode]);
+  const multiUserChartData = useMemo(() => getComparisonChartData(processedData, selectedExercise, progressWeightMode), [processedData, selectedExercise, progressWeightMode]);
   const chartData = isAllUsersSelected ? multiUserChartData : userChartData;
   const generalComparisonData = useMemo(() => getGeneralComparisonChartData(processedData), [processedData]);
   const weeklyVolumeData = useMemo(() => getWeeklyVolumeChartData(processedData), [processedData]);
@@ -691,8 +692,10 @@ export default function GymTracker() {
             exerciseOptions={progressExerciseOptions}
             stats={stats}
             chartData={chartData}
+            weightMode={progressWeightMode}
             onUserChange={handleUserChange}
             onExerciseChange={setSelectedExercise}
+            onWeightModeChange={setProgressWeightMode}
             onOpenRecordsWorkout={openRecordsWorkout}
           />
         )}

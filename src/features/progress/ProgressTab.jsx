@@ -12,10 +12,14 @@ export default function ProgressTab({
   exerciseOptions,
   stats,
   chartData,
+  weightMode,
   onUserChange,
   onExerciseChange,
+  onWeightModeChange,
   onOpenRecordsWorkout,
 }) {
+  const weightModeLabel = weightMode === 'max' ? 'Máximo del día' : 'Media del día';
+
   return (
     <div className="animate-in fade-in slide-in-from-bottom-4 duration-500 space-y-6">
       <div className="grid md:grid-cols-2 gap-4 max-w-3xl mx-auto">
@@ -80,10 +84,11 @@ export default function ProgressTab({
       )}
 
       <div className="bg-slate-900 border border-slate-800 p-6 rounded-3xl shadow-xl relative overflow-hidden">
-        <div className="flex items-center justify-between mb-8">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-8">
           <h2 className="text-lg font-bold flex items-center gap-2 text-white">
             <TrendingUp className="text-emerald-500" /> {isAllUsers ? 'Comparativa por Ejercicio' : 'Gráfica de Progreso'}
           </h2>
+          <WeightModeToggle value={weightMode} onChange={onWeightModeChange} />
         </div>
         <div className="h-[350px] w-full">
           {chartData.length > 0 ? (
@@ -92,14 +97,14 @@ export default function ProgressTab({
                 <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" vertical={false} />
                 <XAxis dataKey="date" stroke="#64748b" fontSize={12} tickMargin={15} axisLine={false} tickLine={false} />
                 <YAxis stroke="#64748b" fontSize={12} domain={['dataMin - 5', 'dataMax + 5']} axisLine={false} tickLine={false} tickFormatter={(value) => `${value}kg`} />
-                <Tooltip content={<ProgressTooltip isAllUsers={isAllUsers} />} />
+                <Tooltip content={<ProgressTooltip isAllUsers={isAllUsers} weightMode={weightMode} />} />
                 {isAllUsers && <Legend wrapperStyle={{ paddingTop: '20px' }} />}
                 {isAllUsers ? (
                   chartUsers.map((user, idx) => (
                     <Line key={user} type="monotone" dataKey={user} name={user} stroke={userColors[idx % userColors.length]} strokeWidth={3} connectNulls dot={chartData.length < 30 ? { r: 4, fill: '#0f172a', stroke: userColors[idx % userColors.length], strokeWidth: 2 } : false} activeDot={{ r: 6 }} />
                   ))
                 ) : (
-                  <Line type="monotone" dataKey="weight" name="Media del día" stroke="#10b981" strokeWidth={4} dot={chartData.length < 30 ? { r: 4, fill: '#0f172a', stroke: '#10b981', strokeWidth: 2 } : false} activeDot={{ r: 8, fill: '#10b981' }} />
+                  <Line type="monotone" dataKey="weight" name={weightModeLabel} stroke="#10b981" strokeWidth={4} dot={chartData.length < 30 ? { r: 4, fill: '#0f172a', stroke: '#10b981', strokeWidth: 2 } : false} activeDot={{ r: 8, fill: '#10b981' }} />
                 )}
               </LineChart>
             </ResponsiveContainer>
@@ -117,9 +122,32 @@ export default function ProgressTab({
           chartData={chartData}
           chartUsers={chartUsers}
           isAllUsers={isAllUsers}
+          weightMode={weightMode}
           onOpenRecordsWorkout={onOpenRecordsWorkout}
         />
       )}
+    </div>
+  );
+}
+
+function WeightModeToggle({ value, onChange }) {
+  return (
+    <div className="grid grid-cols-2 bg-slate-950 border border-slate-800 rounded-xl p-1 w-full sm:w-auto">
+      <button
+        type="button"
+        onClick={() => onChange('average')}
+        className={`min-w-0 px-3 sm:px-4 py-2 rounded-lg text-xs sm:text-sm font-black transition-colors ${value === 'average' ? 'bg-emerald-500 text-slate-950' : 'text-slate-400 hover:text-white'}`}
+      >
+        <span className="block truncate">Media</span>
+      </button>
+      <button
+        type="button"
+        onClick={() => onChange('max')}
+        className={`min-w-0 px-3 sm:px-4 py-2 rounded-lg text-xs sm:text-sm font-black transition-colors flex items-center justify-center gap-1.5 ${value === 'max' ? 'bg-emerald-500 text-slate-950' : 'text-slate-400 hover:text-white'}`}
+      >
+        <Dumbbell size={14} className="shrink-0" />
+        <span className="truncate">Máximo</span>
+      </button>
     </div>
   );
 }
@@ -173,8 +201,9 @@ function StatCard({ icon, iconClassName, label, value, unit, valueClassName = 't
   );
 }
 
-function ProgressTooltip({ active, label, payload, isAllUsers }) {
+function ProgressTooltip({ active, label, payload, isAllUsers, weightMode }) {
   if (!active || !payload?.length) return null;
+  const modeLabel = weightMode === 'max' ? 'Máximo del día' : 'Media del día';
 
   const items = payload
     .filter((item) => item.value != null)
@@ -188,7 +217,7 @@ function ProgressTooltip({ active, label, payload, isAllUsers }) {
       <div className="space-y-3">
         {items.map((item) => (
           <div key={item.key} className="space-y-2 border-t border-slate-800 first:border-t-0 first:pt-0 pt-3">
-            <p className="text-xs font-bold uppercase tracking-wider text-emerald-400">{isAllUsers ? 'Mejor Serie(s)' : 'Media del día'}</p>
+            <p className="text-xs font-bold uppercase tracking-wider text-emerald-400">{modeLabel}</p>
             {isAllUsers && <p className="text-sm font-bold text-white">{item.user}</p>}
             <div className="space-y-1">
               {item.bestSets.map((set) => (
@@ -208,15 +237,17 @@ function ProgressTooltip({ active, label, payload, isAllUsers }) {
   );
 }
 
-function ProgressDataTable({ chartData, chartUsers, isAllUsers, onOpenRecordsWorkout }) {
+function ProgressDataTable({ chartData, chartUsers, isAllUsers, weightMode, onOpenRecordsWorkout }) {
   const rows = buildProgressTableRows(chartData, chartUsers, isAllUsers);
+  const modeLabel = weightMode === 'max' ? 'Máximo del día' : 'Media del día';
+  const weightLabel = weightMode === 'max' ? 'Peso máx.' : 'Peso medio';
 
   return (
     <section className="bg-slate-900 border border-slate-800 rounded-3xl overflow-hidden shadow-xl">
       <div className="p-5 border-b border-slate-800 flex items-center justify-between gap-3">
         <div>
           <h2 className="text-lg font-bold text-white">Datos del gráfico</h2>
-          <p className="text-sm text-slate-400 mt-1">{isAllUsers ? 'Mejores series por fecha.' : 'Media de peso y total de series por fecha.'} Usa Ver para abrir el entreno en Registros.</p>
+          <p className="text-sm text-slate-400 mt-1">{weightMode === 'max' ? 'Peso máximo por fecha.' : 'Media de peso y total de series por fecha.'} Usa Ver para abrir el entreno en Registros.</p>
         </div>
         <span className="text-xs font-mono text-slate-400 bg-slate-950 border border-slate-800 rounded-full px-3 py-1">{rows.length} filas</span>
       </div>
@@ -227,8 +258,8 @@ function ProgressDataTable({ chartData, chartUsers, isAllUsers, onOpenRecordsWor
             <tr>
               <th className="p-4">Fecha</th>
               {isAllUsers && <th className="p-4">Usuario</th>}
-              <th className="p-4 w-1 whitespace-nowrap">{isAllUsers ? 'Mejor Serie(s)' : 'Media del día'}</th>
-              <th className="p-4 text-right">{isAllUsers ? 'Peso máx.' : 'Peso medio'}</th>
+              <th className="p-4 w-1 whitespace-nowrap">{modeLabel}</th>
+              <th className="p-4 text-right">{weightLabel}</th>
               <th className="p-4 text-center">Entreno</th>
             </tr>
           </thead>

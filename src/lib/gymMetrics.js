@@ -73,7 +73,7 @@ export function getUserExercises(processedData, selectedUser) {
   return [...new Set(processedData[selectedUser].map((entry) => entry.exercise))];
 }
 
-export function getProgressChartData(processedData, selectedUser, selectedExercise) {
+export function getProgressChartData(processedData, selectedUser, selectedExercise, weightMode = 'average') {
   if (!processedData || !selectedUser || !selectedExercise || !processedData[selectedUser]) return [];
 
   const rawData = processedData[selectedUser]
@@ -86,62 +86,30 @@ export function getProgressChartData(processedData, selectedUser, selectedExerci
     return acc;
   }, {});
 
-  return Object.entries(groupedByDate).map(([date, entries]) => {
-    const maxWeight = Math.max(...entries.map((entry) => entry.weight));
-    const maxOneRepMax = Math.max(...entries.map((entry) => entry.oneRepMax ?? estimateOneRepMax(entry.weight, entry.reps)));
-    const totalSets = entries.reduce((sum, entry) => sum + entry.sets, 0);
-    const averageWeight = roundToOneDecimal(
-      totalSets > 0
-        ? entries.reduce((sum, entry) => sum + entry.sets * entry.weight, 0) / totalSets
-        : 0,
-    );
-    const averageReps = roundToOneDecimal(
-      totalSets > 0
-        ? entries.reduce((sum, entry) => sum + entry.sets * entry.reps, 0) / totalSets
-        : entries[0]?.reps || 0,
-    );
-    const representative = entries.find((entry) => entry.weight === maxWeight) || entries[0];
-    const averageSet = {
-      ...representative,
-      id: `${selectedUser}-${date}-average`,
-      sets: totalSets,
-      reps: averageReps,
-      weight: averageWeight,
-    };
-
-    return {
-      ...representative,
-      date,
-      weight: averageWeight,
-      reps: averageReps,
-      oneRepMax: estimateOneRepMax(averageWeight, averageReps),
-      maxWeight,
-      maxOneRepMax,
-      totalSets,
-      averageSet,
-      bestSets: [averageSet],
-      workoutKey: buildWorkoutKey(selectedUser, representative.date, representative.dayLabel),
-    };
-  });
+  return Object.entries(groupedByDate).map(([date, entries]) => buildExercisePoint(selectedUser, date, entries, weightMode));
 }
 
-export function getComparisonChartData(processedData, comparisonExercise) {
+export function getComparisonChartData(processedData, comparisonExercise, weightMode = 'average') {
   if (!processedData || !comparisonExercise) return [];
 
   const dataByDate = {};
   Object.keys(processedData).forEach((user) => {
     const userEntries = processedData[user].filter((entry) => entry.exercise === comparisonExercise);
-    userEntries.forEach((entry) => {
-      if (!dataByDate[entry.date]) dataByDate[entry.date] = { date: entry.date, rawDate: entry.date };
-      const currentMax = dataByDate[entry.date][user];
-      if (!currentMax || entry.weight > currentMax) {
-        dataByDate[entry.date][user] = entry.weight;
-        dataByDate[entry.date][`${user}__reps`] = entry.reps;
-        dataByDate[entry.date][`${user}__bestSets`] = [entry];
-        dataByDate[entry.date][`${user}__workoutKey`] = buildWorkoutKey(user, entry.date, entry.dayLabel);
-      } else if (entry.weight === currentMax) {
-        dataByDate[entry.date][`${user}__bestSets`].push(entry);
-      }
+    const groupedByDate = userEntries.reduce((acc, entry) => {
+      if (!acc[entry.date]) acc[entry.date] = [];
+      acc[entry.date].push(entry);
+      return acc;
+    }, {});
+
+    Object.entries(groupedByDate).forEach(([date, entries]) => {
+      const exercisePoint = buildExercisePoint(user, date, entries, weightMode);
+      if (!dataByDate[date]) dataByDate[date] = { date, rawDate: date };
+      dataByDate[date][user] = exercisePoint.weight;
+      dataByDate[date][`${user}__reps`] = exercisePoint.reps;
+      dataByDate[date][`${user}__bestSets`] = exercisePoint.bestSets;
+      dataByDate[date][`${user}__workoutKey`] = exercisePoint.workoutKey;
+      dataByDate[date][`${user}__maxWeight`] = exercisePoint.maxWeight;
+      dataByDate[date][`${user}__maxOneRepMax`] = exercisePoint.maxOneRepMax;
     });
   });
 
@@ -294,6 +262,72 @@ function cleanTextValue(value) {
 function normalizePositiveNumber(value, fallback) {
   const numericValue = Number(value);
   return Number.isFinite(numericValue) && numericValue > 0 ? numericValue : fallback;
+}
+
+function buildExercisePoint(user, date, entries, weightMode) {
+  if (weightMode === 'max') return buildMaxExercisePoint(user, date, entries);
+  return buildAverageExercisePoint(user, date, entries);
+}
+
+function buildAverageExercisePoint(user, date, entries) {
+  const maxWeight = Math.max(...entries.map((entry) => entry.weight));
+  const maxOneRepMax = Math.max(...entries.map((entry) => entry.oneRepMax ?? estimateOneRepMax(entry.weight, entry.reps)));
+  const totalSets = entries.reduce((sum, entry) => sum + entry.sets, 0);
+  const averageWeight = roundToOneDecimal(
+    totalSets > 0
+      ? entries.reduce((sum, entry) => sum + entry.sets * entry.weight, 0) / totalSets
+      : 0,
+  );
+  const averageReps = roundToOneDecimal(
+    totalSets > 0
+      ? entries.reduce((sum, entry) => sum + entry.sets * entry.reps, 0) / totalSets
+      : entries[0]?.reps || 0,
+  );
+  const representative = entries.find((entry) => entry.weight === maxWeight) || entries[0];
+  const averageSet = {
+    ...representative,
+    id: `${user}-${date}-average`,
+    user,
+    sets: totalSets,
+    reps: averageReps,
+    weight: averageWeight,
+  };
+
+  return {
+    ...representative,
+    user,
+    date,
+    weight: averageWeight,
+    reps: averageReps,
+    oneRepMax: estimateOneRepMax(averageWeight, averageReps),
+    maxWeight,
+    maxOneRepMax,
+    totalSets,
+    averageSet,
+    bestSets: [averageSet],
+    workoutKey: buildWorkoutKey(user, representative.date, representative.dayLabel),
+  };
+}
+
+function buildMaxExercisePoint(user, date, entries) {
+  const maxWeight = Math.max(...entries.map((entry) => entry.weight));
+  const maxOneRepMax = Math.max(...entries.map((entry) => entry.oneRepMax ?? estimateOneRepMax(entry.weight, entry.reps)));
+  const bestSets = entries.filter((entry) => entry.weight === maxWeight);
+  const representative = bestSets[0] || entries[0];
+
+  return {
+    ...representative,
+    user,
+    date,
+    weight: maxWeight,
+    reps: representative.reps,
+    oneRepMax: maxOneRepMax,
+    maxWeight,
+    maxOneRepMax,
+    totalSets: bestSets.reduce((sum, entry) => sum + entry.sets, 0),
+    bestSets,
+    workoutKey: buildWorkoutKey(user, representative.date, representative.dayLabel),
+  };
 }
 
 function roundToOneDecimal(value) {
