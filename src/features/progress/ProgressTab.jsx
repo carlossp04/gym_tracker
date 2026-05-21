@@ -243,7 +243,7 @@ function ProgressDataTable({ chartData, chartUsers, isAllUsers, weightMode, onOp
   const gridClassName = isAllUsers
     ? 'md:grid-cols-4'
     : 'md:grid-cols-3';
-  const mobileMinWidthClassName = isAllUsers ? 'min-w-[560px] md:min-w-0' : 'min-w-[430px] md:min-w-0';
+  const mobileTableWidthClassName = isAllUsers ? 'min-w-[580px] md:min-w-0' : 'min-w-[520px] md:min-w-0';
 
   return (
     <section className="bg-slate-900 border border-slate-800 rounded-3xl overflow-hidden shadow-xl">
@@ -256,43 +256,45 @@ function ProgressDataTable({ chartData, chartUsers, isAllUsers, weightMode, onOp
       </div>
 
       <div className="overflow-x-auto">
-        <div className={`grid grid-cols-[7rem_minmax(13rem,1fr)_6rem] ${gridClassName} ${mobileMinWidthClassName} items-center gap-3 md:gap-4 bg-slate-950 px-4 md:px-5 py-3 text-xs font-bold uppercase tracking-wider text-slate-500`}>
-          <span>Fecha</span>
-          {isAllUsers && <span className="hidden md:block">Usuario</span>}
-          <span>{modeLabel}</span>
-          <span className="text-center">Entreno</span>
-        </div>
-        <div className={`divide-y divide-slate-800/60 text-sm ${mobileMinWidthClassName}`}>
-          {rows.map((row) => (
-            <div
-              key={row.key}
-              className={`grid grid-cols-[7rem_minmax(13rem,1fr)_6rem] ${gridClassName} items-center gap-3 md:gap-4 px-4 md:px-5 py-4 hover:bg-slate-800/30 transition-colors`}
-            >
-              <span className="font-mono text-slate-400 whitespace-nowrap">{row.date}</span>
-              {isAllUsers && <span className="hidden md:block text-slate-300 font-bold whitespace-nowrap truncate">{row.user}</span>}
-              <div className="min-w-0 space-y-1 text-slate-200 whitespace-nowrap">
-                {isAllUsers && <p className="md:hidden text-xs font-bold text-slate-400 truncate">{row.user}</p>}
-                {row.bestSets.map((set) => (
-                  <p key={set.id} className="truncate">
-                    <span className="font-black text-white">{set.sets}</span>
-                    <span className="text-slate-500"> series x </span>
-                    <span className="font-black text-white">{set.reps}</span>
-                    <span className="text-slate-500"> reps x </span>
-                    <span className="font-black text-emerald-400">{set.weight} kg</span>
-                  </p>
-                ))}
+        <div className={`w-full ${mobileTableWidthClassName}`}>
+          <div className={`grid grid-cols-[7rem_minmax(13rem,1fr)_6rem] ${gridClassName} items-center gap-3 md:gap-4 bg-slate-950 pl-4 pr-12 md:px-5 py-3 text-xs font-bold uppercase tracking-wider text-slate-500`}>
+            <span>Fecha</span>
+            {isAllUsers && <span className="hidden md:block">Usuario</span>}
+            <span>{modeLabel}</span>
+            <span className="text-center">Entreno</span>
+          </div>
+          <div className="divide-y divide-slate-800/60 text-sm">
+            {rows.map((row) => (
+              <div
+                key={row.key}
+                className={`grid grid-cols-[7rem_minmax(13rem,1fr)_6rem] ${gridClassName} items-center gap-3 md:gap-4 pl-4 pr-12 md:px-5 py-4 hover:bg-slate-800/30 transition-colors`}
+              >
+                <span className="font-mono text-slate-400 whitespace-nowrap">{row.date}</span>
+                {isAllUsers && <span className="hidden md:block text-slate-300 font-bold whitespace-nowrap truncate">{row.user}</span>}
+                <div className="min-w-0 space-y-1 text-slate-200 whitespace-nowrap">
+                  {isAllUsers && <p className="md:hidden text-xs font-bold text-slate-400 truncate">{row.user}</p>}
+                  {row.bestSets.map((set) => (
+                    <p key={set.id} className="truncate">
+                      <span className="font-black text-white">{set.sets}</span>
+                      <span className="text-slate-500"> series x </span>
+                      <span className="font-black text-white">{set.reps}</span>
+                      <span className="text-slate-500"> reps x </span>
+                      <span className="font-black text-emerald-400">{set.weight} kg</span>
+                    </p>
+                  ))}
+                </div>
+                <div className="flex justify-end md:justify-center">
+                  <button
+                    type="button"
+                    onClick={() => onOpenRecordsWorkout(row.workout)}
+                    className="bg-emerald-500 hover:bg-emerald-400 text-slate-950 px-3 sm:px-4 py-2 rounded-lg text-xs font-black inline-flex items-center gap-1.5 sm:gap-2"
+                  >
+                    <Eye size={14} /> Ver
+                  </button>
+                </div>
               </div>
-              <div className="flex justify-end md:justify-center">
-                <button
-                  type="button"
-                  onClick={() => onOpenRecordsWorkout(row.workout)}
-                  className="bg-emerald-500 hover:bg-emerald-400 text-slate-950 px-3 sm:px-4 py-2 rounded-lg text-xs font-black inline-flex items-center gap-1.5 sm:gap-2"
-                >
-                  <Eye size={14} /> Ver
-                </button>
-              </div>
-            </div>
-          ))}
+            ))}
+          </div>
         </div>
       </div>
     </section>
