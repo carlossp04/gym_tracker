@@ -255,9 +255,9 @@ function ProgressDataTable({ chartData, chartUsers, isAllUsers, weightMode, onOp
         <span className="text-xs font-mono text-slate-400 bg-slate-950 border border-slate-800 rounded-full px-3 py-1">{rows.length} filas</span>
       </div>
 
-      <div className="overflow-x-auto">
+      <div className="max-h-[70dvh] overflow-auto">
         <div className={`w-full ${mobileTableWidthClassName}`}>
-          <div className={`grid grid-cols-[7rem_minmax(13rem,1fr)_6rem] ${gridClassName} items-center gap-3 md:gap-4 bg-slate-950 pl-4 pr-12 md:px-5 py-3 text-xs font-bold uppercase tracking-wider text-slate-500`}>
+          <div className={`sticky top-0 z-10 grid grid-cols-[7rem_minmax(13rem,1fr)_6rem] ${gridClassName} items-center gap-3 md:gap-4 bg-slate-950 pl-4 pr-12 md:px-5 py-3 text-xs font-bold uppercase tracking-wider text-slate-500 shadow-lg shadow-slate-950/30`}>
             <span>Fecha</span>
             {isAllUsers && <span className="hidden md:block">Usuario</span>}
             <span>{modeLabel}</span>

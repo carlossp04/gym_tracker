@@ -84,7 +84,7 @@ export default function ExercisesTab({
         </div>
       )}
       <div className="bg-slate-900 border border-slate-800 rounded-3xl overflow-hidden shadow-2xl">
-        <div className="overflow-x-auto">
+        <div className="max-h-[70dvh] overflow-auto">
           <table className="w-full table-fixed text-left min-w-[600px]">
             <colgroup>
               <col className="w-14" />
@@ -92,7 +92,7 @@ export default function ExercisesTab({
               <col className="w-28" />
               <col className="w-36" />
             </colgroup>
-            <thead className="bg-slate-950 text-slate-500 uppercase text-xs tracking-wider font-bold">
+            <thead className="sticky top-0 z-10 bg-slate-950 text-slate-500 uppercase text-xs tracking-wider font-bold shadow-lg shadow-slate-950/30">
               <tr>
                 <th className="p-4 text-center"><CheckCircle2 size={16} /></th>
                 <th className="p-6 whitespace-nowrap">Nombre del Ejercicio</th>

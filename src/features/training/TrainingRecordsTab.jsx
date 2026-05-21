@@ -209,9 +209,9 @@ export default function TrainingRecordsTab({
           </div>
         </div>
 
-        <div className="overflow-x-auto">
+        <div className="max-h-[70dvh] overflow-auto">
           <table className="w-full text-left min-w-[860px]">
-            <thead className="bg-slate-950 text-slate-500 uppercase text-xs tracking-wider font-bold">
+            <thead className="sticky top-0 z-10 bg-slate-950 text-slate-500 uppercase text-xs tracking-wider font-bold shadow-lg shadow-slate-950/30">
               <tr>
                 <th className="p-4 text-center w-12">
                   <input
