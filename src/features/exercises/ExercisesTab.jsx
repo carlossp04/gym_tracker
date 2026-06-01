@@ -7,6 +7,7 @@ const SORT_BY_SIMILARITY = 'similarity';
 const SIMILARITY_THRESHOLD = 0.84;
 
 export default function ExercisesTab({
+  canEdit = false,
   allUniqueExercises,
   processedData,
   selectedForMerge,
@@ -28,9 +29,11 @@ export default function ExercisesTab({
     <div className="animate-in fade-in slide-in-from-right-4 duration-500 space-y-6">
       <div className="text-center space-y-2 mb-8">
         <h2 className="text-2xl font-black text-white flex items-center justify-center gap-3">
-          <Database className="text-purple-500" size={32} /> Gestión de Ejercicios
+          <Database className="text-purple-500" size={32} /> {canEdit ? 'Gestión de Ejercicios' : 'Ejercicios'}
         </h2>
-        <p className="text-slate-400 text-sm">Gestiona nombres de ejercicios (fusionar o renombrar).</p>
+        <p className="text-slate-400 text-sm">
+          {canEdit ? 'Gestiona nombres de ejercicios (fusionar o renombrar).' : 'Consulta nombres de ejercicios y posibles duplicados.'}
+        </p>
       </div>
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 bg-slate-900 border border-slate-800 rounded-2xl p-4 shadow-xl">
         <div>
@@ -76,7 +79,7 @@ export default function ExercisesTab({
           </div>
         </div>
       )}
-      {selectedForMerge.length > 1 && (
+      {canEdit && selectedForMerge.length > 1 && (
         <div className="sticky top-20 z-30 flex justify-center mb-6 animate-in slide-in-from-top-4">
           <button onClick={onOpenMergeModal} className="bg-purple-500 hover:bg-purple-400 text-white px-8 py-3 rounded-full font-bold shadow-xl shadow-purple-900/40 flex items-center gap-2 transform hover:scale-105 transition-all">
             <GitMerge size={20} /> Fusionar {selectedForMerge.length} seleccionados
@@ -87,33 +90,41 @@ export default function ExercisesTab({
         <div className="max-h-[70dvh] overflow-auto">
           <table className="w-full table-fixed text-left min-w-[600px]">
             <colgroup>
-              <col className="w-14" />
+              {canEdit && <col className="w-14" />}
               <col />
-              <col className="w-28" />
+              {canEdit && <col className="w-28" />}
               <col className="w-36" />
             </colgroup>
             <thead className="sticky top-0 z-10 bg-slate-950 text-slate-500 uppercase text-xs tracking-wider font-bold shadow-lg shadow-slate-950/30">
               <tr>
-                <th className="p-4 text-center"><CheckCircle2 size={16} /></th>
+                {canEdit && <th className="p-4 text-center"><CheckCircle2 size={16} /></th>}
                 <th className="p-6 whitespace-nowrap">Nombre del Ejercicio</th>
-                <th className="p-6 text-center">Acciones</th>
+                {canEdit && <th className="p-6 text-center">Acciones</th>}
                 <th className="p-6 text-right">Registros</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-800/50 text-sm">
               {displayedExercises.map((exercise) => {
                 const count = exerciseCounts[exercise] || 0;
-                const isSelected = selectedForMerge.includes(exercise);
+                const isSelected = canEdit && selectedForMerge.includes(exercise);
                 const similarity = similarityByExercise[exercise];
 
                 return (
                   <tr key={exercise} className={`transition-colors group ${isSelected ? 'bg-purple-500/10' : 'hover:bg-slate-800/30'}`}>
-                    <td className="p-4 text-center cursor-pointer" onClick={() => onToggleSelection(exercise)}>
-                      <div className={`w-5 h-5 rounded border mx-auto flex items-center justify-center transition-all ${isSelected ? 'bg-purple-500 border-purple-500' : 'border-slate-600 group-hover:border-purple-400'}`}>
-                        {isSelected && <Check size={14} className="text-white" />}
-                      </div>
-                    </td>
-                    <td className="p-6 font-bold text-slate-200 group-hover:text-white cursor-pointer whitespace-nowrap" onClick={() => onToggleSelection(exercise)} title={exercise}>
+                    {canEdit && (
+                      <td className="p-4 text-center cursor-pointer" onClick={() => onToggleSelection(exercise)}>
+                        <div className={`w-5 h-5 rounded border mx-auto flex items-center justify-center transition-all ${isSelected ? 'bg-purple-500 border-purple-500' : 'border-slate-600 group-hover:border-purple-400'}`}>
+                          {isSelected && <Check size={14} className="text-white" />}
+                        </div>
+                      </td>
+                    )}
+                    <td
+                      className={`p-6 font-bold text-slate-200 group-hover:text-white whitespace-nowrap ${canEdit ? 'cursor-pointer' : ''}`}
+                      onClick={() => {
+                        if (canEdit) onToggleSelection(exercise);
+                      }}
+                      title={exercise}
+                    >
                       <div className="flex flex-col gap-1">
                         <span>{exercise}</span>
                         {similarity && (
@@ -123,19 +134,26 @@ export default function ExercisesTab({
                         )}
                       </div>
                     </td>
-                    <td className="p-6 text-center">
-                      <button
-                        onClick={(event) => {
-                          event.stopPropagation();
-                          onOpenRenameModal(exercise);
-                        }}
-                        className="p-2 hover:bg-slate-700 rounded-lg text-slate-500 hover:text-white transition-colors"
-                        title="Renombrar"
-                      >
-                        <Pencil size={16} />
-                      </button>
-                    </td>
-                    <td className="p-6 text-right cursor-pointer" onClick={() => onToggleSelection(exercise)}>
+                    {canEdit && (
+                      <td className="p-6 text-center">
+                        <button
+                          onClick={(event) => {
+                            event.stopPropagation();
+                            onOpenRenameModal(exercise);
+                          }}
+                          className="p-2 hover:bg-slate-700 rounded-lg text-slate-500 hover:text-white transition-colors"
+                          title="Renombrar"
+                        >
+                          <Pencil size={16} />
+                        </button>
+                      </td>
+                    )}
+                    <td
+                      className={`p-6 text-right ${canEdit ? 'cursor-pointer' : ''}`}
+                      onClick={() => {
+                        if (canEdit) onToggleSelection(exercise);
+                      }}
+                    >
                       <span className="inline-block px-3 py-1 bg-slate-800 rounded-full text-slate-400 text-xs font-mono whitespace-nowrap">{count} sets</span>
                     </td>
                   </tr>

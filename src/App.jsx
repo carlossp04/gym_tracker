@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { initialTrainingText, userColors } from './constants/appConstants';
 import AuthScreen from './features/auth/AuthScreen';
+import EditModeModal from './features/auth/EditModeModal';
 import AppHeader from './features/layout/AppHeader';
 import TabNav from './features/layout/TabNav';
 import ProgressTab from './features/progress/ProgressTab';
@@ -45,6 +46,10 @@ import {
 import { normalizeChatText, parseWhatsAppChat, validateParsedData } from './lib/whatsappParser';
 
 const ALL_USERS_OPTION = 'Todos los usuarios';
+const READ_MODE = 'read';
+const EDIT_MODE = 'edit';
+const editPasswordHash = import.meta.env.VITE_EDIT_PASSWORD_HASH?.trim().toLowerCase() || '';
+const editPasswordPlain = import.meta.env.VITE_EDIT_PASSWORD || '';
 
 export default function GymTracker() {
   const [trainingText, setTrainingText] = useState('');
@@ -63,6 +68,11 @@ export default function GymTracker() {
   const [newTrainingText, setNewTrainingText] = useState('');
   const [saveStatus, setSaveStatus] = useState('idle');
   const [saveMessage, setSaveMessage] = useState('');
+  const [appMode, setAppMode] = useState(READ_MODE);
+  const [showEditModeModal, setShowEditModeModal] = useState(false);
+  const [editModePassword, setEditModePassword] = useState('');
+  const [editModeError, setEditModeError] = useState('');
+  const [isCheckingEditModePassword, setIsCheckingEditModePassword] = useState(false);
 
   const [selectedUser, setSelectedUser] = useState('');
   const [selectedExercise, setSelectedExercise] = useState('');
@@ -82,6 +92,7 @@ export default function GymTracker() {
   const [editForm, setEditForm] = useState(null);
   const [bulkEditFields, setBulkEditFields] = useState(() => getEmptyBulkEditFields());
   const [recordsFocus, setRecordsFocus] = useState(null);
+  const canEdit = appMode === EDIT_MODE;
 
   const editedData = useMemo(
     () => applyEntryEdits(parsedData, entryEdits, deletedEntryIds),
@@ -114,6 +125,11 @@ export default function GymTracker() {
       setSelectedExercise(progressExerciseOptions[0]);
     }
   }, [progressExerciseOptions, selectedExercise]);
+
+  useEffect(() => {
+    if (canEdit) return;
+    if (activeTab === 'training') setActiveTab('progress');
+  }, [activeTab, canEdit]);
 
   const loadTrainingPayload = useCallback((payload, key) => {
     const cleanText = normalizeChatText(payload.trainingText || '');
@@ -269,7 +285,7 @@ export default function GymTracker() {
   };
 
   const appendTraining = async () => {
-    if (!newTrainingText.trim() || !cryptoKey) return;
+    if (!canEdit || !newTrainingText.trim() || !cryptoKey) return;
 
     try {
       setSaveStatus('saving');
@@ -306,6 +322,11 @@ export default function GymTracker() {
   };
 
   const importVault = async (event) => {
+    if (!canEdit) {
+      event.target.value = '';
+      return;
+    }
+
     const file = event.target.files[0];
     if (!file) return;
 
@@ -347,6 +368,11 @@ export default function GymTracker() {
     setPassword('');
     setRememberDevice(false);
     setActiveTab('progress');
+    setAppMode(READ_MODE);
+    setShowEditModeModal(false);
+    setEditModePassword('');
+    setEditModeError('');
+    setIsCheckingEditModePassword(false);
   };
 
   const handleUserChange = (user) => {
@@ -355,14 +381,71 @@ export default function GymTracker() {
     setSelectedExercise(exercises.length > 0 ? exercises[0] : '');
   };
 
+  const clearEditModeState = () => {
+    setSelectedForMerge([]);
+    setShowMergeModal(false);
+    setMergeNameInput('');
+    setRenamingExercise(null);
+    setRenameInput('');
+    setEditingEntry(null);
+    setBulkEditingEntries([]);
+    setEditForm(null);
+    setBulkEditFields(getEmptyBulkEditFields());
+    setNewTrainingText('');
+    setSaveStatus('idle');
+    setSaveMessage('');
+    if (activeTab === 'training') setActiveTab('progress');
+  };
+
+  const handleEditModeRequest = () => {
+    if (canEdit) {
+      clearEditModeState();
+      setAppMode(READ_MODE);
+      return;
+    }
+
+    setEditModePassword('');
+    setEditModeError('');
+    setShowEditModeModal(true);
+  };
+
+  const activateEditMode = async (event) => {
+    event.preventDefault();
+    if (!editModePassword) return;
+
+    if (!editPasswordHash && !editPasswordPlain) {
+      setEditModeError('Configura VITE_EDIT_PASSWORD_HASH o VITE_EDIT_PASSWORD.');
+      return;
+    }
+
+    setIsCheckingEditModePassword(true);
+    setEditModeError('');
+
+    try {
+      const isValid = await verifyEditModePassword(editModePassword);
+      if (!isValid) {
+        setEditModeError('Contraseña de edición incorrecta.');
+        return;
+      }
+
+      setAppMode(EDIT_MODE);
+      setShowEditModeModal(false);
+      setEditModePassword('');
+    } catch {
+      setEditModeError('No se pudo comprobar la contraseña.');
+    } finally {
+      setIsCheckingEditModePassword(false);
+    }
+  };
+
   const openMergeModal = () => {
-    if (selectedForMerge.length < 2) return;
+    if (!canEdit || selectedForMerge.length < 2) return;
     setMergeNameInput(selectedForMerge[0]);
     setShowMergeModal(true);
   };
 
   const performMerge = async () => {
-    if (!mergeNameInput.trim()) return;
+    if (!canEdit || !mergeNameInput.trim()) return;
 
     const newName = mergeNameInput.trim();
     const newAliases = { ...aliases };
@@ -385,6 +468,8 @@ export default function GymTracker() {
   };
 
   const toggleSelection = (exerciseName) => {
+    if (!canEdit) return;
+
     setSelectedForMerge((current) =>
       current.includes(exerciseName)
         ? current.filter((entry) => entry !== exerciseName)
@@ -393,12 +478,14 @@ export default function GymTracker() {
   };
 
   const openRenameModal = (exerciseName) => {
+    if (!canEdit) return;
+
     setRenamingExercise(exerciseName);
     setRenameInput(exerciseName);
   };
 
   const performRename = async () => {
-    if (!renameInput.trim() || !renamingExercise) return;
+    if (!canEdit || !renameInput.trim() || !renamingExercise) return;
 
     const finalName = renameInput.trim();
     const newAliases = { ...aliases };
@@ -420,6 +507,8 @@ export default function GymTracker() {
   };
 
   const openTrainingEditModal = (entry) => {
+    if (!canEdit) return;
+
     setEditingEntry(entry);
     setBulkEditingEntries([]);
     setBulkEditFields(getEmptyBulkEditFields());
@@ -435,7 +524,7 @@ export default function GymTracker() {
   };
 
   const openBulkTrainingEditModal = (entries) => {
-    if (!entries.length) return;
+    if (!canEdit || !entries.length) return;
 
     setEditingEntry(null);
     setBulkEditingEntries(entries);
@@ -448,7 +537,7 @@ export default function GymTracker() {
   };
 
   const deleteTrainingEntries = async (entries, confirmMessage, successMessage) => {
-    if (!entries.length) return;
+    if (!canEdit || !entries.length) return;
     if (!window.confirm(confirmMessage)) return;
 
     try {
@@ -512,7 +601,7 @@ export default function GymTracker() {
   };
 
   const performTrainingEdit = async () => {
-    if (!editingEntry || !editForm) return;
+    if (!canEdit || !editingEntry || !editForm) return;
 
     const sets = Number(editForm.sets);
     const reps = Number(editForm.reps);
@@ -554,7 +643,7 @@ export default function GymTracker() {
   };
 
   const performBulkTrainingEdit = async () => {
-    if (!bulkEditingEntries.length || !editForm) return;
+    if (!canEdit || !bulkEditingEntries.length || !editForm) return;
 
     const enabledFieldNames = Object.entries(bulkEditFields)
       .filter(([, enabled]) => enabled)
@@ -638,12 +727,12 @@ export default function GymTracker() {
 
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100 font-sans selection:bg-emerald-500/30 pb-20">
-      <AppHeader onReset={lockApp} />
+      <AppHeader mode={appMode} onEditModeRequest={handleEditModeRequest} onReset={lockApp} />
 
       <main className="max-w-6xl mx-auto p-4 space-y-6 mt-4 relative">
-        <TabNav activeTab={activeTab} onTabChange={setActiveTab} />
+        <TabNav activeTab={activeTab} canEdit={canEdit} onTabChange={setActiveTab} />
 
-        {activeTab === 'training' && (
+        {activeTab === 'training' && canEdit && (
           <TrainingInputPanel
             newTrainingText={newTrainingText}
             saveStatus={saveStatus}
@@ -657,6 +746,7 @@ export default function GymTracker() {
 
         {activeTab === 'records' && (
           <TrainingRecordsTab
+            canEdit={canEdit}
             trainingEntries={trainingEntries}
             focusedWorkout={recordsFocus}
             onOpenTrainingEdit={openTrainingEditModal}
@@ -669,6 +759,7 @@ export default function GymTracker() {
 
         {activeTab === 'exercises' && (
           <ExercisesTab
+            canEdit={canEdit}
             allUniqueExercises={allUniqueExercises}
             processedData={processedData}
             selectedForMerge={selectedForMerge}
@@ -716,7 +807,7 @@ export default function GymTracker() {
           />
         )}
 
-        {showMergeModal && (
+        {showMergeModal && canEdit && (
           <MergeExerciseModal
             mergeNameInput={mergeNameInput}
             onMergeNameChange={setMergeNameInput}
@@ -725,7 +816,7 @@ export default function GymTracker() {
           />
         )}
 
-        {renamingExercise && (
+        {renamingExercise && canEdit && (
           <RenameExerciseModal
             renameInput={renameInput}
             onRenameInputChange={setRenameInput}
@@ -734,7 +825,7 @@ export default function GymTracker() {
           />
         )}
 
-        {editingEntry && editForm && (
+        {editingEntry && editForm && canEdit && (
           <TrainingEditModal
             editForm={editForm}
             onEditFormChange={setEditForm}
@@ -746,7 +837,7 @@ export default function GymTracker() {
           />
         )}
 
-        {bulkEditingEntries.length > 0 && editForm && (
+        {bulkEditingEntries.length > 0 && editForm && canEdit && (
           <TrainingEditModal
             mode="bulk"
             selectedCount={bulkEditingEntries.length}
@@ -760,6 +851,21 @@ export default function GymTracker() {
               setBulkEditFields(getEmptyBulkEditFields());
             }}
             onConfirm={performBulkTrainingEdit}
+          />
+        )}
+
+        {showEditModeModal && (
+          <EditModeModal
+            password={editModePassword}
+            error={editModeError}
+            isChecking={isCheckingEditModePassword}
+            onPasswordChange={setEditModePassword}
+            onCancel={() => {
+              setShowEditModeModal(false);
+              setEditModePassword('');
+              setEditModeError('');
+            }}
+            onSubmit={activateEditMode}
           />
         )}
       </main>
@@ -809,4 +915,20 @@ function parseTrainingDate(date) {
   const [day, month, year] = date.split(/[/.-]/).map(Number);
   const fullYear = year < 100 ? 2000 + year : year;
   return new Date(fullYear, month - 1, day);
+}
+
+async function verifyEditModePassword(password) {
+  if (editPasswordHash) {
+    return (await sha256Hex(password)) === editPasswordHash;
+  }
+
+  return password === editPasswordPlain;
+}
+
+async function sha256Hex(value) {
+  const bytes = new TextEncoder().encode(value);
+  const digest = await crypto.subtle.digest('SHA-256', bytes);
+  return [...new Uint8Array(digest)]
+    .map((byte) => byte.toString(16).padStart(2, '0'))
+    .join('');
 }

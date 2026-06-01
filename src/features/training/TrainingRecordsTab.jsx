@@ -5,6 +5,7 @@ import { normalizeSearchText } from '../../lib/textSearch';
 const ALL_OPTIONS = 'Todos';
 
 export default function TrainingRecordsTab({
+  canEdit = false,
   trainingEntries,
   focusedWorkout,
   onOpenTrainingEdit,
@@ -48,8 +49,8 @@ export default function TrainingRecordsTab({
   const filteredEntryIds = useMemo(() => new Set(filteredEntries.map((entry) => entry.id)), [filteredEntries]);
   const selectedEntryIdSet = useMemo(() => new Set(selectedEntryIds), [selectedEntryIds]);
   const selectedEntries = useMemo(
-    () => filteredEntries.filter((entry) => selectedEntryIdSet.has(entry.id)),
-    [filteredEntries, selectedEntryIdSet],
+    () => (canEdit ? filteredEntries.filter((entry) => selectedEntryIdSet.has(entry.id)) : []),
+    [canEdit, filteredEntries, selectedEntryIdSet],
   );
   const hasActiveFilters = Object.values(filters).some((value) => value && value !== ALL_OPTIONS);
   const allVisibleSelected = filteredEntries.length > 0 && selectedEntries.length === filteredEntries.length;
@@ -69,6 +70,8 @@ export default function TrainingRecordsTab({
   };
 
   const toggleEntrySelection = (entryId) => {
+    if (!canEdit) return;
+
     setSelectedEntryIds((current) =>
       current.includes(entryId)
         ? current.filter((id) => id !== entryId)
@@ -77,6 +80,8 @@ export default function TrainingRecordsTab({
   };
 
   const toggleAllVisible = () => {
+    if (!canEdit) return;
+
     setSelectedEntryIds((current) => {
       if (allVisibleSelected) return current.filter((id) => !filteredEntryIds.has(id));
 
@@ -91,13 +96,13 @@ export default function TrainingRecordsTab({
   };
 
   const openBulkEdit = () => {
-    if (selectedEntries.length === 0) return;
+    if (!canEdit || selectedEntries.length === 0) return;
     onOpenBulkTrainingEdit(selectedEntries);
     clearSelection();
   };
 
   const deleteSelected = () => {
-    if (selectedEntries.length === 0) return;
+    if (!canEdit || selectedEntries.length === 0) return;
     onDeleteSelectedTrainingEntries(selectedEntries);
   };
 
@@ -107,11 +112,13 @@ export default function TrainingRecordsTab({
         <div className="p-5 border-b border-slate-800 space-y-4">
           <div className="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-3">
             <div>
-              <h2 className="text-lg font-bold text-white">Registros editables</h2>
-              <p className="text-sm text-slate-400 mt-1">Corrige usuario, fecha, ejercicio, series, reps o peso.</p>
+              <h2 className="text-lg font-bold text-white">{canEdit ? 'Registros editables' : 'Registros'}</h2>
+              <p className="text-sm text-slate-400 mt-1">
+                {canEdit ? 'Corrige usuario, fecha, ejercicio, series, reps o peso.' : 'Consulta y filtra entrenamientos guardados.'}
+              </p>
             </div>
             <div className="flex flex-wrap items-center gap-2">
-              {selectedEntries.length > 0 && (
+              {canEdit && selectedEntries.length > 0 && (
                 <>
                   <span className="text-xs font-mono text-emerald-300 bg-emerald-500/10 border border-emerald-500/20 rounded-full px-3 py-1">
                     {selectedEntries.length} seleccionados
@@ -213,15 +220,17 @@ export default function TrainingRecordsTab({
           <table className="w-full text-left min-w-[860px]">
             <thead className="sticky top-0 z-10 bg-slate-950 text-slate-500 uppercase text-xs tracking-wider font-bold shadow-lg shadow-slate-950/30">
               <tr>
-                <th className="p-4 text-center w-12">
-                  <input
-                    type="checkbox"
-                    checked={allVisibleSelected}
-                    onChange={toggleAllVisible}
-                    aria-label="Seleccionar registros visibles"
-                    className="h-4 w-4 accent-emerald-500"
-                  />
-                </th>
+                {canEdit && (
+                  <th className="p-4 text-center w-12">
+                    <input
+                      type="checkbox"
+                      checked={allVisibleSelected}
+                      onChange={toggleAllVisible}
+                      aria-label="Seleccionar registros visibles"
+                      className="h-4 w-4 accent-emerald-500"
+                    />
+                  </th>
+                )}
                 <th className="p-4">Fecha</th>
                 <th className="p-4">Usuario</th>
                 <th className="p-4">Ejercicio</th>
@@ -229,13 +238,14 @@ export default function TrainingRecordsTab({
                 <th className="p-4 text-right">Reps</th>
                 <th className="p-4 text-right">Kg</th>
                 <th className="p-4 text-right">1RM</th>
-                <th className="p-4 text-center">Acciones</th>
+                {canEdit && <th className="p-4 text-center">Acciones</th>}
               </tr>
             </thead>
             <tbody className="text-sm">
               {groupedEntries.map((group, groupIndex) => (
                 <WorkoutGroup
                   key={group.key}
+                  canEdit={canEdit}
                   group={group}
                   groupIndex={groupIndex}
                   isFocused={focusedWorkout?.workoutKey === group.key}
@@ -248,7 +258,7 @@ export default function TrainingRecordsTab({
               ))}
               {groupedEntries.length === 0 && (
                 <tr>
-                  <td colSpan={9} className="p-10 text-center text-slate-500">
+                  <td colSpan={canEdit ? 9 : 7} className="p-10 text-center text-slate-500">
                     Sin registros con esos filtros.
                   </td>
                 </tr>
@@ -262,6 +272,7 @@ export default function TrainingRecordsTab({
 }
 
 function WorkoutGroup({
+  canEdit,
   group,
   groupIndex,
   isFocused,
@@ -286,7 +297,7 @@ function WorkoutGroup({
   return (
     <>
       <tr className={`${headerBgClass} ${stripeClass}`}>
-        <td colSpan={9} className="px-4 py-3">
+        <td colSpan={canEdit ? 9 : 7} className="px-4 py-3">
           <div className="flex flex-wrap items-center justify-between gap-2">
             <div className="flex flex-wrap items-center gap-2 font-bold">
               <span>{group.date}</span>
@@ -303,7 +314,7 @@ function WorkoutGroup({
         </td>
       </tr>
       {group.entries.map((entry, entryIndex) => {
-        const isSelected = selectedEntryIdSet.has(entry.id);
+        const isSelected = canEdit && selectedEntryIdSet.has(entry.id);
         const workoutExerciseEntries = entriesByExercise.get(entry.exercise) || [entry];
 
         return (
@@ -311,15 +322,17 @@ function WorkoutGroup({
             key={entry.id}
             className={`${isSelected ? 'bg-emerald-500/10' : rowBgClass} ${stripeClass} hover:bg-slate-800/40 transition-colors border-t border-slate-800/50 ${entryIndex === group.entries.length - 1 ? 'border-b-8 border-b-slate-950' : ''}`}
           >
-            <td className="p-4 text-center">
-              <input
-                type="checkbox"
-                checked={isSelected}
-                onChange={() => onToggleEntrySelection(entry.id)}
-                aria-label={`Seleccionar ${entry.exercise}`}
-                className="h-4 w-4 accent-emerald-500"
-              />
-            </td>
+            {canEdit && (
+              <td className="p-4 text-center">
+                <input
+                  type="checkbox"
+                  checked={isSelected}
+                  onChange={() => onToggleEntrySelection(entry.id)}
+                  aria-label={`Seleccionar ${entry.exercise}`}
+                  className="h-4 w-4 accent-emerald-500"
+                />
+              </td>
+            )}
             <td className="p-4 text-slate-400 font-mono whitespace-nowrap">{entry.date}</td>
             <td className="p-4 text-slate-300 font-bold whitespace-nowrap">{entry.user}</td>
             <td className="p-4 text-white font-bold max-w-[260px] truncate" title={entry.exercise}>{entry.exercise}</td>
@@ -327,31 +340,33 @@ function WorkoutGroup({
             <td className="p-4 text-right text-slate-300">{entry.reps}</td>
             <td className="p-4 text-right text-emerald-400 font-black">{entry.weight}</td>
             <td className="p-4 text-right text-slate-300">{entry.oneRepMax} kg</td>
-            <td className="p-4">
-              <div className="flex items-center justify-center gap-1">
-                <button
-                  onClick={() => onOpenTrainingEdit(entry)}
-                  className="p-2 hover:bg-slate-700 rounded-lg text-slate-500 hover:text-white transition-colors"
-                  title="Editar registro"
-                >
-                  <Pencil size={16} />
-                </button>
-                <button
-                  onClick={() => onDeleteTrainingEntry(entry)}
-                  className="p-2 hover:bg-red-500/10 rounded-lg text-slate-500 hover:text-red-300 transition-colors"
-                  title="Eliminar registro"
-                >
-                  <Trash2 size={16} />
-                </button>
-                <button
-                  onClick={() => onDeleteWorkoutExercise(workoutExerciseEntries)}
-                  className="p-2 hover:bg-red-500/10 rounded-lg text-slate-500 hover:text-red-300 transition-colors"
-                  title="Eliminar este ejercicio del día"
-                >
-                  <ListX size={16} />
-                </button>
-              </div>
-            </td>
+            {canEdit && (
+              <td className="p-4">
+                <div className="flex items-center justify-center gap-1">
+                  <button
+                    onClick={() => onOpenTrainingEdit(entry)}
+                    className="p-2 hover:bg-slate-700 rounded-lg text-slate-500 hover:text-white transition-colors"
+                    title="Editar registro"
+                  >
+                    <Pencil size={16} />
+                  </button>
+                  <button
+                    onClick={() => onDeleteTrainingEntry(entry)}
+                    className="p-2 hover:bg-red-500/10 rounded-lg text-slate-500 hover:text-red-300 transition-colors"
+                    title="Eliminar registro"
+                  >
+                    <Trash2 size={16} />
+                  </button>
+                  <button
+                    onClick={() => onDeleteWorkoutExercise(workoutExerciseEntries)}
+                    className="p-2 hover:bg-red-500/10 rounded-lg text-slate-500 hover:text-red-300 transition-colors"
+                    title="Eliminar este ejercicio del día"
+                  >
+                    <ListX size={16} />
+                  </button>
+                </div>
+              </td>
+            )}
           </tr>
         );
       })}

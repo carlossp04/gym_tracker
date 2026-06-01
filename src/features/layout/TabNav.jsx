@@ -20,11 +20,13 @@ const tabLabels = {
   exercises: 'Ejercicios',
 };
 
-export default function TabNav({ activeTab, onTabChange }) {
+export default function TabNav({ activeTab, canEdit, onTabChange }) {
+  const visibleTabs = canEdit ? tabs : tabs.filter((tab) => tab !== 'training');
+
   return (
     <div className="flex justify-start md:justify-center mb-6 overflow-x-auto no-scrollbar">
       <div className="bg-slate-900 p-1.5 rounded-xl border border-slate-800 inline-flex min-w-fit">
-        {tabs.map((tab) => (
+        {visibleTabs.map((tab) => (
           <button
             key={tab}
             onClick={() => onTabChange(tab)}
