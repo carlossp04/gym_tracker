@@ -1,6 +1,6 @@
-import { Dumbbell, Lock, ShieldCheck, ShieldOff } from 'lucide-react';
+import { Dumbbell, Lock } from 'lucide-react';
 
-export default function AppHeader({ mode, onEditModeRequest, onReset }) {
+export default function AppHeader({ mode, onReset }) {
   const isEditMode = mode === 'edit';
 
   return (
@@ -23,17 +23,6 @@ export default function AppHeader({ mode, onEditModeRequest, onReset }) {
           </span>
         </div>
         <div className="flex items-center gap-2">
-          <button
-            onClick={onEditModeRequest}
-            className={`text-xs font-bold py-2 px-4 rounded-lg transition-all flex items-center gap-2 ${
-              isEditMode
-                ? 'bg-slate-800 hover:bg-slate-700 text-slate-200'
-                : 'bg-amber-400 hover:bg-amber-300 text-slate-950'
-            }`}
-          >
-            {isEditMode ? <ShieldOff size={14} /> : <ShieldCheck size={14} />}
-            {isEditMode ? 'Salir edición' : 'Modo edición'}
-          </button>
           <button
             onClick={onReset}
             className="text-xs font-bold bg-[#E65F57] hover:bg-[#d44b43] text-white py-2 px-4 rounded-lg transition-all shadow-lg shadow-red-900/20 flex items-center gap-2"

@@ -1,4 +1,4 @@
-import { BarChart3, CalendarDays, ClipboardList, Database, PlusCircle, TrendingUp } from 'lucide-react';
+import { BarChart3, CalendarDays, ClipboardList, Database, PlusCircle, ShieldCheck, ShieldOff, TrendingUp } from 'lucide-react';
 
 const tabs = ['progress', 'general', 'calendar', 'training', 'records', 'exercises'];
 
@@ -9,6 +9,7 @@ const activeClasses = {
   training: 'bg-emerald-500 text-slate-950',
   records: 'bg-cyan-500 text-slate-950',
   exercises: 'bg-purple-500 text-slate-950',
+  mode: 'bg-amber-400 text-slate-950',
 };
 
 const tabLabels = {
@@ -20,7 +21,7 @@ const tabLabels = {
   exercises: 'Ejercicios',
 };
 
-export default function TabNav({ activeTab, canEdit, onTabChange }) {
+export default function TabNav({ activeTab, canEdit, onTabChange, onModeSelect }) {
   const visibleTabs = canEdit ? tabs : tabs.filter((tab) => tab !== 'training');
 
   return (
@@ -43,6 +44,15 @@ export default function TabNav({ activeTab, canEdit, onTabChange }) {
             {tabLabels[tab]}
           </button>
         ))}
+        <button
+          onClick={onModeSelect}
+          className={`px-5 sm:px-8 py-3 rounded-lg text-sm font-bold transition-all flex items-center gap-2 ${
+            canEdit ? `${activeClasses.mode} shadow-lg` : 'text-slate-400 hover:text-white'
+          }`}
+        >
+          {canEdit ? <ShieldOff size={16} strokeWidth={2.5} /> : <ShieldCheck size={16} strokeWidth={2.5} />}
+          {canEdit ? 'Lectura' : 'Edición'}
+        </button>
       </div>
     </div>
   );

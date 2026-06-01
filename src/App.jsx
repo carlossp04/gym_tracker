@@ -727,10 +727,10 @@ export default function GymTracker() {
 
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100 font-sans selection:bg-emerald-500/30 pb-20">
-      <AppHeader mode={appMode} onEditModeRequest={handleEditModeRequest} onReset={lockApp} />
+      <AppHeader mode={appMode} onReset={lockApp} />
 
       <main className="max-w-6xl mx-auto p-4 space-y-6 mt-4 relative">
-        <TabNav activeTab={activeTab} canEdit={canEdit} onTabChange={setActiveTab} />
+        <TabNav activeTab={activeTab} canEdit={canEdit} onTabChange={setActiveTab} onModeSelect={handleEditModeRequest} />
 
         {activeTab === 'training' && canEdit && (
           <TrainingInputPanel

@@ -24,7 +24,7 @@ export default function EditModeModal({
           </div>
           <div>
             <h3 className="text-xl font-bold text-white">Modo Edición</h3>
-            <p className="text-xs text-slate-500">Introduce la contraseña de Carlos.</p>
+            <p className="text-xs text-slate-500">Introduce la contraseña de edición</p>
           </div>
         </div>
 
