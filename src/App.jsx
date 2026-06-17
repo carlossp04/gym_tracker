@@ -7,6 +7,7 @@ import TabNav from './features/layout/TabNav';
 import ProgressTab from './features/progress/ProgressTab';
 import CalendarTab from './features/calendar/CalendarTab';
 import ExercisesTab from './features/exercises/ExercisesTab';
+import AiResumeTab from './features/ai/AiResumeTab';
 import GeneralComparisonTab from './features/general/GeneralComparisonTab';
 import MergeExerciseModal from './features/exercises/MergeExerciseModal';
 import RenameExerciseModal from './features/exercises/RenameExerciseModal';
@@ -802,6 +803,14 @@ export default function GymTracker() {
             generalComparisonData={generalComparisonData}
             weeklyVolumeData={weeklyVolumeData}
             generalUserSummaries={generalUserSummaries}
+            availableUsers={availableUsers}
+            userColors={userColors}
+          />
+        )}
+
+        {activeTab === 'aiResume' && (
+          <AiResumeTab
+            processedData={processedData}
             availableUsers={availableUsers}
             userColors={userColors}
           />
