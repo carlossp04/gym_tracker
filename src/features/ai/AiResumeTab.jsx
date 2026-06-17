@@ -323,7 +323,7 @@ function buildAiResumeText(entries, selectedUsers, aspects, exactDateInput, rang
 
   const payload = {
     schema: 'gym_tracker_ai_resume_v1',
-    instruction: 'Use this compact gym log context as source truth. Dates are dd/mm/yyyy. Weights are kg. Sets use sets x reps @ kg. one_rm is estimated.',
+    instruction: 'Use this compact gym log context as source truth. Dates are dd/mm/yyyy. Weight field kg means total load recorded, not per side. For dumbbell/mancuerna exercises, kg=28 means 28 kg total load, typically 14+14 if two dumbbells. one_rm is estimated.',
     source_note: 'Data already includes app edits, deleted-entry filtering, and exercise aliases.',
     scope: {
       users: selectedUsers,
@@ -444,7 +444,7 @@ function groupWorkouts(entries) {
     }
 
     const exercise = workout.exercises.get(entry.exercise);
-    exercise.sets.push(`${entry.sets}x${entry.reps}@${entry.weight}`);
+    exercise.sets.push(buildSetPayload(entry));
     exercise.volume += entry.volumen;
     exercise.best_kg = Math.max(exercise.best_kg, entry.weight);
     exercise.best_one_rm = Math.max(exercise.best_one_rm, entry.oneRepMax || 0);
@@ -474,6 +474,14 @@ function flattenEntries(processedData, users) {
       oneRepMax: entry.oneRepMax ?? estimateOneRepMax(entry.weight, entry.reps),
     })),
   );
+}
+
+function buildSetPayload(entry) {
+  return {
+    sets: entry.sets,
+    reps: entry.reps,
+    kg: entry.weight,
+  };
 }
 
 function sortEntries(entries) {
