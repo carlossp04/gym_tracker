@@ -4,6 +4,8 @@ Aplicación React/Vite para importar entrenamientos desde WhatsApp, consultar pr
 
 Además del formulario manual y la importación desde WhatsApp, permite crear rutinas con varias sesiones. Una sesión iniciada desde plantilla genera sus series objetivo, permite registrar peso y repeticiones reales, marcar cada serie y guardar únicamente las completadas. Las plantillas y el entrenamiento activo forman parte del vault cifrado.
 
+La sección Rutinas incluye un importador asistido por IA. La aplicación genera directrices estrictas junto al texto original, valida la respuesta contra el schema `gym_tracker_routine_v1` y solo entonces permite añadirla al vault. No se envían datos directamente a ningún proveedor de IA desde la aplicación.
+
 ## Desarrollo
 
 ```bash

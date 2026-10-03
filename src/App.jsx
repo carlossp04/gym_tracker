@@ -544,6 +544,7 @@ export default function GymTracker() {
           id: crypto.randomUUID(),
           templateExerciseId: templateExercise.id,
           exercise: templateExercise.exercise,
+          notes: templateExercise.notes || '',
           sets: Array.from({ length: templateExercise.targetSets }, (_, index) => ({
             id: crypto.randomUUID(),
             number: index + 1,

@@ -1,11 +1,13 @@
 import { useState } from 'react';
-import { ArrowDown, ArrowUp, LayoutTemplate, Plus, Save, Trash2 } from 'lucide-react';
+import { ArrowDown, ArrowUp, LayoutTemplate, Plus, Save, Sparkles, Trash2 } from 'lucide-react';
+import RoutineImportModal from './RoutineImportModal';
 
 export default function RoutinesTab({ canEdit, routines, exerciseOptions, saveStatus, saveMessage, onSaveRoutines }) {
   const [selectedRoutineId, setSelectedRoutineId] = useState(() => routines[0]?.id || '');
   const [selectedSessionId, setSelectedSessionId] = useState('');
   const [newRoutineName, setNewRoutineName] = useState('');
   const [newSessionName, setNewSessionName] = useState('');
+  const [showImportModal, setShowImportModal] = useState(false);
   const selectedRoutine = routines.find((routine) => routine.id === selectedRoutineId) || routines[0] || null;
   const selectedSession = selectedRoutine?.sessions.find((session) => session.id === selectedSessionId)
     || selectedRoutine?.sessions[0]
@@ -54,6 +56,15 @@ export default function RoutinesTab({ canEdit, routines, exerciseOptions, saveSt
     if (await onSaveRoutines(nextRoutines)) setSelectedSessionId('');
   };
 
+  const importRoutine = async (routine) => {
+    if (await onSaveRoutines([...routines, routine])) {
+      setSelectedRoutineId(routine.id);
+      setSelectedSessionId(routine.sessions[0]?.id || '');
+      return true;
+    }
+    return false;
+  };
+
   if (!canEdit) return <RoutineReadView routines={routines} />;
 
   return (
@@ -62,6 +73,10 @@ export default function RoutinesTab({ canEdit, routines, exerciseOptions, saveSt
         <h2 className="text-2xl font-black text-white flex items-center justify-center gap-3"><LayoutTemplate className="text-fuchsia-400" size={30} /> Rutinas y plantillas</h2>
         <p className="text-sm text-slate-400">Organiza una rutina en sesiones y define las series y repeticiones objetivo.</p>
       </header>
+
+      <div className="flex justify-center">
+        <button type="button" onClick={() => setShowImportModal(true)} className="px-5 py-3 bg-fuchsia-500/10 hover:bg-fuchsia-500/20 border border-fuchsia-500/30 text-fuchsia-200 rounded-xl font-black flex items-center gap-2"><Sparkles size={18} /> Importar rutina con IA</button>
+      </div>
 
       {saveStatus === 'success' && saveMessage && <p className="max-w-2xl mx-auto text-sm text-emerald-300 bg-emerald-500/10 border border-emerald-500/30 rounded-xl p-3">{saveMessage}</p>}
 
@@ -106,6 +121,15 @@ export default function RoutinesTab({ canEdit, routines, exerciseOptions, saveSt
           )}
         </div>
       )}
+
+      {showImportModal && (
+        <RoutineImportModal
+          existingRoutines={routines}
+          isSaving={saveStatus === 'saving'}
+          onImport={importRoutine}
+          onClose={() => setShowImportModal(false)}
+        />
+      )}
     </div>
   );
 }
@@ -133,6 +157,7 @@ function SessionEditor({ routine, session, routines, exerciseOptions, isSaving, 
   const [exercise, setExercise] = useState('');
   const [sets, setSets] = useState('3');
   const [reps, setReps] = useState('10');
+  const [notes, setNotes] = useState('');
   const [error, setError] = useState('');
 
   const addExercise = (event) => {
@@ -143,8 +168,9 @@ function SessionEditor({ routine, session, routines, exerciseOptions, isSaving, 
       setError('Completa un ejercicio, series y repeticiones válidas.');
       return;
     }
-    setExercises((current) => [...current, { id: crypto.randomUUID(), exercise: exercise.trim(), targetSets, targetReps }]);
+    setExercises((current) => [...current, { id: crypto.randomUUID(), exercise: exercise.trim(), targetSets, targetReps, notes: notes.trim() }]);
     setExercise('');
+    setNotes('');
     setError('');
   };
 
@@ -193,13 +219,14 @@ function SessionEditor({ routine, session, routines, exerciseOptions, isSaving, 
         <label className="block"><span className={labelClasses}>Series</span><input type="number" min="1" value={sets} onChange={(event) => setSets(event.target.value)} className={inputClasses} /></label>
         <label className="block"><span className={labelClasses}>Reps</span><input type="number" min="1" value={reps} onChange={(event) => setReps(event.target.value)} className={inputClasses} /></label>
         <button className={primaryButtonClasses}><Plus size={17} /> Añadir</button>
+        <label className="block sm:col-span-4"><span className={labelClasses}>Notas opcionales</span><input value={notes} onChange={(event) => setNotes(event.target.value)} placeholder="Por pierna, agarre neutro..." maxLength={250} className={inputClasses} /></label>
       </form>
 
       <div className="border border-slate-800 rounded-2xl overflow-hidden">
         {exercises.length === 0 ? <p className="p-6 text-center text-slate-600">Añade el primer ejercicio.</p> : exercises.map((item, index) => (
           <div key={item.id} className="px-4 py-3 border-b last:border-b-0 border-slate-800 grid sm:grid-cols-[2rem_1fr_6rem_6rem_auto] items-center gap-3">
             <span className="hidden sm:block text-slate-600 font-black">{index + 1}.</span>
-            <input list="routine-exercises" value={item.exercise} onChange={(event) => updateExercise(item.id, { exercise: event.target.value })} aria-label={`Ejercicio ${index + 1}`} className={compactInputClasses} />
+            <div className="space-y-1"><input list="routine-exercises" value={item.exercise} onChange={(event) => updateExercise(item.id, { exercise: event.target.value })} aria-label={`Ejercicio ${index + 1}`} className={compactInputClasses} /><input value={item.notes || ''} onChange={(event) => updateExercise(item.id, { notes: event.target.value })} maxLength={250} placeholder="Notas opcionales" aria-label={`Notas de ${item.exercise}`} className={`${compactInputClasses} text-xs text-amber-200`} /></div>
             <label><span className="sm:hidden text-[10px] text-slate-500">Series</span><input type="number" min="1" step="1" value={item.targetSets} onChange={(event) => updateExercise(item.id, { targetSets: Number(event.target.value) })} aria-label={`Series de ${item.exercise}`} className={compactInputClasses} /></label>
             <label><span className="sm:hidden text-[10px] text-slate-500">Reps</span><input type="number" min="1" step="1" value={item.targetReps} onChange={(event) => updateExercise(item.id, { targetReps: Number(event.target.value) })} aria-label={`Repeticiones de ${item.exercise}`} className={compactInputClasses} /></label>
             <div className="flex items-center gap-1">
@@ -222,7 +249,7 @@ function RoutineReadView({ routines }) {
     <div className="space-y-5">
       <header className="text-center"><h2 className="text-2xl font-black text-white flex items-center justify-center gap-3"><LayoutTemplate className="text-fuchsia-400" /> Rutinas</h2><p className="text-sm text-slate-500 mt-2">Activa el modo edición para modificar plantillas.</p></header>
       {routines.length === 0 ? <p className="text-center text-slate-500 p-10">No hay rutinas configuradas.</p> : routines.map((routine) => (
-        <section key={routine.id} className="bg-slate-900 border border-slate-800 rounded-3xl p-5"><h3 className="text-xl font-black text-white mb-4">{routine.name}</h3><div className="grid md:grid-cols-2 gap-3">{routine.sessions.map((session) => <div key={session.id} className="bg-slate-950 border border-slate-800 rounded-2xl p-4"><h4 className="font-black text-emerald-400">{session.name}</h4><div className="mt-3 space-y-2">{session.exercises.map((item) => <div key={item.id} className="flex justify-between gap-3 text-sm"><span className="text-slate-300">{item.exercise}</span><span className="font-mono text-slate-500">{item.targetSets} × {item.targetReps}</span></div>)}</div></div>)}</div></section>
+        <section key={routine.id} className="bg-slate-900 border border-slate-800 rounded-3xl p-5"><h3 className="text-xl font-black text-white mb-4">{routine.name}</h3><div className="grid md:grid-cols-2 gap-3">{routine.sessions.map((session) => <div key={session.id} className="bg-slate-950 border border-slate-800 rounded-2xl p-4"><h4 className="font-black text-emerald-400">{session.name}</h4><div className="mt-3 space-y-2">{session.exercises.map((item) => <div key={item.id} className="flex justify-between gap-3 text-sm"><span className="text-slate-300">{item.exercise}{item.notes && <span className="block text-xs text-amber-300">{item.notes}</span>}</span><span className="font-mono text-slate-500">{item.targetSets} × {item.targetReps}</span></div>)}</div></div>)}</div></section>
       ))}
     </div>
   );

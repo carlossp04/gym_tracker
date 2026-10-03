@@ -116,7 +116,7 @@ function ExerciseCard({ exercise, index, onUpdateSet, onUpdateExercise, onRemove
   return (
     <article className="bg-slate-950/70 border border-slate-800 rounded-2xl overflow-hidden">
       <div className="px-4 py-4 border-b border-slate-800 flex flex-col lg:flex-row lg:items-center gap-3">
-        <div className="min-w-0 flex-1"><p className="text-xs text-slate-600 font-black">EJERCICIO {index + 1}</p><h3 className="text-lg font-black text-white truncate">{exercise.exercise}</h3><p className="text-xs text-emerald-400 mt-1">{completed}/{exercise.sets.length} series</p></div>
+        <div className="min-w-0 flex-1"><p className="text-xs text-slate-600 font-black">EJERCICIO {index + 1}</p><h3 className="text-lg font-black text-white truncate">{exercise.exercise}</h3>{exercise.notes && <p className="text-xs text-amber-300 mt-1">{exercise.notes}</p>}<p className="text-xs text-emerald-400 mt-1">{completed}/{exercise.sets.length} series</p></div>
         <form className="flex gap-2" onSubmit={(event) => { event.preventDefault(); applyWeightToAll(event); }}>
           <input name="bulkWeight" type="number" min="0.1" step="0.1" defaultValue={exercise.sets.find((set) => set.weight)?.weight || ''} placeholder="Peso kg" className="w-28 h-10 bg-slate-900 border border-slate-700 rounded-lg px-3 text-sm text-white" />
           <button className="h-10 px-3 bg-slate-800 hover:bg-slate-700 rounded-lg text-xs font-black text-slate-200">Aplicar a todas</button>

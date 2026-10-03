@@ -185,7 +185,7 @@ function RoutineLauncher({
           <div className="divide-y divide-slate-800">
             {selectedSession.exercises.map((item, index) => (
               <div key={item.id} className="px-4 py-3 flex items-center justify-between gap-4">
-                <span className="font-bold text-slate-200"><span className="text-slate-600 mr-2">{index + 1}.</span>{item.exercise}</span>
+                <span className="font-bold text-slate-200"><span className="text-slate-600 mr-2">{index + 1}.</span>{item.exercise}{item.notes && <span className="block ml-6 text-xs font-normal text-amber-300">{item.notes}</span>}</span>
                 <span className="text-sm font-mono text-emerald-400 whitespace-nowrap">{item.targetSets} × {item.targetReps}</span>
               </div>
             ))}
