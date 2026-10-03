@@ -19,6 +19,39 @@ export function isRemoteStorageEnabled() {
   return Boolean(supabase);
 }
 
+export async function getRemoteSession() {
+  if (!supabase) return null;
+  const { data, error } = await supabase.auth.getSession();
+  if (error) throw error;
+  return data.session;
+}
+
+export function onRemoteAuthStateChange(callback) {
+  if (!supabase) return () => {};
+  const { data } = supabase.auth.onAuthStateChange((event, session) => callback(session, event));
+  return () => data.subscription.unsubscribe();
+}
+
+export async function signInRemoteAccount(email, password) {
+  if (!supabase) throw new Error('Supabase no está configurado.');
+  const { data, error } = await supabase.auth.signInWithPassword({ email: email.trim(), password });
+  if (error) throw error;
+  return data.session;
+}
+
+export async function signUpRemoteAccount(email, password) {
+  if (!supabase) throw new Error('Supabase no está configurado.');
+  const { data, error } = await supabase.auth.signUp({ email: email.trim(), password });
+  if (error) throw error;
+  return data;
+}
+
+export async function signOutRemoteAccount() {
+  if (!supabase) return;
+  const { error } = await supabase.auth.signOut();
+  if (error) throw error;
+}
+
 export function getSavedVaultId() {
   return localStorage.getItem(VAULT_ID_KEY) || DEFAULT_VAULT_ID;
 }
@@ -36,8 +69,12 @@ export async function remoteVaultExists(vaultId) {
 export async function createEncryptedVault(password, payload, vaultId) {
   const salt = crypto.getRandomValues(new Uint8Array(16));
   const key = await deriveKey(password, salt);
-  await saveEncryptedVault(key, payload, salt, vaultId);
-  return { key, payload };
+  const metadata = await saveEncryptedVault(key, payload, {
+    existingSalt: salt,
+    vaultId,
+    expectedRevision: null,
+  });
+  return { key, payload, ...metadata };
 }
 
 export async function unlockEncryptedVault(password, vaultId) {
@@ -54,6 +91,8 @@ export async function unlockEncryptedVault(password, vaultId) {
   return {
     key,
     payload: JSON.parse(decoder.decode(plaintext)),
+    revision: normalizeRevision(record.revision),
+    updatedAt: record.updatedAt,
   };
 }
 
@@ -65,12 +104,22 @@ export async function unlockEncryptedVaultWithKey(key, vaultId) {
   return {
     key,
     payload: await decryptRecord(record, key),
+    revision: normalizeRevision(record.revision),
+    updatedAt: record.updatedAt,
   };
 }
 
-export async function saveEncryptedVault(key, payload, existingSalt, vaultId) {
+export async function saveEncryptedVault(key, payload, options = {}) {
+  const { existingSalt, vaultId, expectedRevision } = options;
   const currentRecord = readRecord();
-  const salt = existingSalt || base64ToBytes(currentRecord.salt);
+  const salt = existingSalt || (currentRecord?.salt ? base64ToBytes(currentRecord.salt) : null);
+  if (!salt) throw new Error('No se encontró la sal criptográfica del vault.');
+
+  const currentRevision = normalizeRevision(currentRecord?.revision);
+  if (!supabase && expectedRevision != null && currentRevision !== expectedRevision) {
+    throw createConflictError();
+  }
+
   const iv = crypto.getRandomValues(new Uint8Array(12));
   const plaintext = encoder.encode(JSON.stringify(payload));
   const ciphertext = await crypto.subtle.encrypt({ name: 'AES-GCM', iv }, key, plaintext);
@@ -84,23 +133,40 @@ export async function saveEncryptedVault(key, payload, existingSalt, vaultId) {
     iv: bytesToBase64(iv),
     ciphertext: bytesToBase64(new Uint8Array(ciphertext)),
     updatedAt: new Date().toISOString(),
+    revision: expectedRevision == null ? 1 : expectedRevision + 1,
   };
 
-  writeLocalRecord(record);
-  if (supabase) await upsertRemoteRecord(vaultId, record);
+  const savedRecord = supabase
+    ? await persistRemoteRecord(vaultId, record, expectedRevision)
+    : record;
+  writeLocalRecord(savedRecord);
+  return { revision: savedRecord.revision, updatedAt: savedRecord.updatedAt };
 }
 
 export function exportEncryptedVault() {
   return localStorage.getItem(STORAGE_KEY);
 }
 
-export async function replaceEncryptedVault(serializedVault, vaultId) {
+export async function replaceEncryptedVault(serializedVault, vaultId, expectedRevision) {
   const parsed = JSON.parse(serializedVault);
   if (!parsed.version || !parsed.salt || !parsed.iv || !parsed.ciphertext) {
     throw new Error('Archivo cifrado inválido.');
   }
-  writeLocalRecord(parsed);
-  if (supabase) await upsertRemoteRecord(vaultId, parsed);
+
+  if (!supabase && expectedRevision != null && normalizeRevision(readRecord()?.revision) !== expectedRevision) {
+    throw createConflictError();
+  }
+
+  const nextRecord = {
+    ...parsed,
+    updatedAt: new Date().toISOString(),
+    revision: expectedRevision == null ? normalizeRevision(parsed.revision) : expectedRevision + 1,
+  };
+  const savedRecord = supabase
+    ? await updateRemoteRecord(vaultId, nextRecord, expectedRevision)
+    : nextRecord;
+  writeLocalRecord(savedRecord);
+  return { revision: savedRecord.revision, updatedAt: savedRecord.updatedAt };
 }
 
 export async function deleteEncryptedVault(vaultId) {
@@ -112,7 +178,13 @@ export async function deleteEncryptedVault(vaultId) {
   }
 
   if (supabase) {
-    throw new Error(`No se permite borrar vault remoto desde cliente: ${vaultId}`);
+    const user = await requireRemoteUser();
+    const { error } = await supabase
+      .from('vaults')
+      .delete()
+      .eq('id', normalizeVaultId(vaultId))
+      .eq('owner_id', user.id);
+    if (error) throw error;
   }
 }
 
@@ -209,10 +281,12 @@ function writeLocalRecord(record) {
 }
 
 async function fetchRemoteRecord(vaultId) {
+  const user = await requireRemoteUser();
   const { data, error } = await supabase
     .from('vaults')
-    .select('version,kdf,cipher,iterations,salt,iv,ciphertext,updated_at')
-    .eq('id', vaultId)
+    .select('version,kdf,cipher,iterations,salt,iv,ciphertext,updated_at,revision')
+    .eq('id', normalizeVaultId(vaultId))
+    .eq('owner_id', user.id)
     .maybeSingle();
 
   if (error) throw error;
@@ -227,14 +301,22 @@ async function fetchRemoteRecord(vaultId) {
     iv: data.iv,
     ciphertext: data.ciphertext,
     updatedAt: data.updated_at,
+    revision: normalizeRevision(data.revision),
   };
 }
 
-async function upsertRemoteRecord(vaultId, record) {
-  if (!vaultId?.trim()) throw new Error('Vault ID requerido.');
+async function persistRemoteRecord(vaultId, record, expectedRevision) {
+  if (expectedRevision == null) return insertRemoteRecord(vaultId, record);
+  return updateRemoteRecord(vaultId, record, expectedRevision);
+}
 
-  const { error } = await supabase.from('vaults').upsert({
+async function insertRemoteRecord(vaultId, record) {
+  if (!vaultId?.trim()) throw new Error('Vault ID requerido.');
+  const user = await requireRemoteUser();
+
+  const { data, error } = await supabase.from('vaults').insert({
     id: vaultId.trim(),
+    owner_id: user.id,
     version: record.version,
     kdf: record.kdf,
     cipher: record.cipher,
@@ -243,9 +325,57 @@ async function upsertRemoteRecord(vaultId, record) {
     iv: record.iv,
     ciphertext: record.ciphertext,
     updated_at: record.updatedAt,
-  });
+    revision: 1,
+  }).select('revision,updated_at').single();
 
   if (error) throw error;
+  return { ...record, revision: data.revision, updatedAt: data.updated_at };
+}
+
+async function updateRemoteRecord(vaultId, record, expectedRevision) {
+  if (!vaultId?.trim()) throw new Error('Vault ID requerido.');
+  if (!Number.isInteger(expectedRevision) || expectedRevision < 1) throw createConflictError();
+  const user = await requireRemoteUser();
+
+  const { data, error } = await supabase
+    .from('vaults')
+    .update({
+      version: record.version,
+      kdf: record.kdf,
+      cipher: record.cipher,
+      iterations: record.iterations,
+      salt: record.salt,
+      iv: record.iv,
+      ciphertext: record.ciphertext,
+      updated_at: record.updatedAt,
+      revision: expectedRevision + 1,
+    })
+    .eq('id', vaultId.trim())
+    .eq('owner_id', user.id)
+    .eq('revision', expectedRevision)
+    .select('revision,updated_at')
+    .maybeSingle();
+
+  if (error) throw error;
+  if (!data) throw createConflictError();
+  return { ...record, revision: data.revision, updatedAt: data.updated_at };
+}
+
+async function requireRemoteUser() {
+  const { data, error } = await supabase.auth.getUser();
+  if (error || !data.user) throw new Error('Debes iniciar sesión para acceder al vault remoto.');
+  return data.user;
+}
+
+function normalizeRevision(value) {
+  const revision = Number(value);
+  return Number.isInteger(revision) && revision > 0 ? revision : 1;
+}
+
+function createConflictError() {
+  const error = new Error('El vault cambió en otro dispositivo. Bloquea y vuelve a abrir antes de guardar.');
+  error.code = 'VAULT_CONFLICT';
+  return error;
 }
 
 function bytesToBase64(bytes) {

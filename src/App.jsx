@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { initialTrainingText, userColors } from './constants/appConstants';
 import AuthScreen from './features/auth/AuthScreen';
-import EditModeModal from './features/auth/EditModeModal';
 import AppHeader from './features/layout/AppHeader';
 import TabNav from './features/layout/TabNav';
 import ProgressTab from './features/progress/ProgressTab';
@@ -32,15 +31,20 @@ import {
   deleteEncryptedVault,
   exportEncryptedVault,
   forgetRememberedVaultKey,
+  getRemoteSession,
   getRememberedVaultKey,
   getSavedVaultId,
   hasEncryptedVault,
   isRemoteStorageEnabled,
+  onRemoteAuthStateChange,
   rememberVaultKey,
   replaceEncryptedVault,
   remoteVaultExists,
   saveEncryptedVault,
   saveVaultId,
+  signInRemoteAccount,
+  signOutRemoteAccount,
+  signUpRemoteAccount,
   unlockEncryptedVault,
   unlockEncryptedVaultWithKey,
 } from './lib/secureStorage';
@@ -49,8 +53,6 @@ import { normalizeChatText, parseWhatsAppChat, validateParsedData } from './lib/
 const ALL_USERS_OPTION = 'Todos los usuarios';
 const READ_MODE = 'read';
 const EDIT_MODE = 'edit';
-const editPasswordHash = import.meta.env.VITE_EDIT_PASSWORD_HASH?.trim().toLowerCase() || '';
-const editPasswordPlain = import.meta.env.VITE_EDIT_PASSWORD || '';
 
 export default function GymTracker() {
   const [trainingText, setTrainingText] = useState('');
@@ -60,6 +62,13 @@ export default function GymTracker() {
   const [vaultId, setVaultId] = useState(() => getSavedVaultId());
   const [initialAutoUnlockVaultId] = useState(() => getSavedVaultId());
   const [isRemoteStorage] = useState(() => isRemoteStorageEnabled());
+  const [remoteSession, setRemoteSession] = useState(null);
+  const [isRemoteAuthReady, setIsRemoteAuthReady] = useState(() => !isRemoteStorageEnabled());
+  const [accountEmail, setAccountEmail] = useState('');
+  const [accountPassword, setAccountPassword] = useState('');
+  const [accountMode, setAccountMode] = useState('signin');
+  const [accountStatus, setAccountStatus] = useState('idle');
+  const [accountMessage, setAccountMessage] = useState('');
   const [hasVault, setHasVault] = useState(() => hasEncryptedVault());
   const [password, setPassword] = useState('');
   const [rememberDevice, setRememberDevice] = useState(false);
@@ -69,11 +78,8 @@ export default function GymTracker() {
   const [newTrainingText, setNewTrainingText] = useState('');
   const [saveStatus, setSaveStatus] = useState('idle');
   const [saveMessage, setSaveMessage] = useState('');
+  const [vaultRevision, setVaultRevision] = useState(null);
   const [appMode, setAppMode] = useState(READ_MODE);
-  const [showEditModeModal, setShowEditModeModal] = useState(false);
-  const [editModePassword, setEditModePassword] = useState('');
-  const [editModeError, setEditModeError] = useState('');
-  const [isCheckingEditModePassword, setIsCheckingEditModePassword] = useState(false);
 
   const [selectedUser, setSelectedUser] = useState('');
   const [selectedExercise, setSelectedExercise] = useState('');
@@ -94,6 +100,7 @@ export default function GymTracker() {
   const [bulkEditFields, setBulkEditFields] = useState(() => getEmptyBulkEditFields());
   const [recordsFocus, setRecordsFocus] = useState(null);
   const canEdit = appMode === EDIT_MODE;
+  const remoteUser = remoteSession?.user || null;
 
   const editedData = useMemo(
     () => applyEntryEdits(parsedData, entryEdits, deletedEntryIds),
@@ -132,7 +139,7 @@ export default function GymTracker() {
     if (activeTab === 'training') setActiveTab('progress');
   }, [activeTab, canEdit]);
 
-  const loadTrainingPayload = useCallback((payload, key) => {
+  const loadTrainingPayload = useCallback((payload, key, metadata = {}) => {
     const cleanText = normalizeChatText(payload.trainingText || '');
     const parsed = parseWhatsAppChat(cleanText);
     const { isValid } = validateParsedData(parsed);
@@ -147,11 +154,63 @@ export default function GymTracker() {
     setEntryEdits(payload.entryEdits || {});
     setDeletedEntryIds(payload.deletedEntryIds || {});
     setCryptoKey(key);
+    setVaultRevision(metadata.revision ?? 1);
     setIsUnlocked(true);
     setAuthError('');
     setSaveStatus('idle');
     setSaveMessage('');
   }, []);
+
+  const clearUnlockedState = useCallback(() => {
+    setIsUnlocked(false);
+    setCryptoKey(null);
+    setVaultRevision(null);
+    setParsedData(null);
+    setTrainingText('');
+    setAliases({});
+    setEntryEdits({});
+    setDeletedEntryIds({});
+    setSelectedForMerge([]);
+    setNewTrainingText('');
+    setEditingEntry(null);
+    setBulkEditingEntries([]);
+    setEditForm(null);
+    setBulkEditFields(getEmptyBulkEditFields());
+    setRecordsFocus(null);
+    setPassword('');
+    setRememberDevice(false);
+    setActiveTab('progress');
+    setAppMode(READ_MODE);
+  }, []);
+
+  useEffect(() => {
+    if (!isRemoteStorage) return undefined;
+    let isCancelled = false;
+
+    getRemoteSession()
+      .then((session) => {
+        if (!isCancelled) setRemoteSession(session);
+      })
+      .catch(() => {
+        if (!isCancelled) setAccountMessage('No se pudo comprobar la sesión de Supabase.');
+      })
+      .finally(() => {
+        if (!isCancelled) setIsRemoteAuthReady(true);
+      });
+
+    const unsubscribe = onRemoteAuthStateChange((session, event) => {
+      if (!isCancelled) {
+        setRemoteSession(session);
+        setIsRemoteAuthReady(true);
+        if (!session && event === 'SIGNED_OUT') clearUnlockedState();
+      }
+    });
+
+    return () => {
+      isCancelled = true;
+      unsubscribe();
+    };
+  }, [clearUnlockedState, isRemoteStorage]);
 
   useEffect(() => {
     let isCancelled = false;
@@ -159,20 +218,26 @@ export default function GymTracker() {
     const unlockRememberedDevice = async () => {
       const cleanVaultId = initialAutoUnlockVaultId.trim();
 
+      if (isRemoteStorage && (!isRemoteAuthReady || !remoteUser)) {
+        if (isRemoteAuthReady) setIsCheckingRememberedDevice(false);
+        return;
+      }
+
       try {
         setIsCheckingRememberedDevice(true);
-        const rememberedKey = await getRememberedVaultKey(cleanVaultId);
+        const rememberedKeyId = getRememberedKeyId(cleanVaultId, remoteUser?.id);
+        const rememberedKey = await getRememberedVaultKey(rememberedKeyId);
         if (!rememberedKey || isCancelled) return;
 
         setIsUnlocking(true);
         const result = await unlockEncryptedVaultWithKey(rememberedKey, cleanVaultId);
         if (!result || isCancelled) return;
 
-        loadTrainingPayload(result.payload, result.key);
+        loadTrainingPayload(result.payload, result.key, result);
         setRememberDevice(true);
       } catch {
         try {
-          await forgetRememberedVaultKey(cleanVaultId);
+          await forgetRememberedVaultKey(getRememberedKeyId(cleanVaultId, remoteUser?.id));
         } catch {
           // Ignore cleanup errors; the normal password flow remains available.
         }
@@ -189,15 +254,59 @@ export default function GymTracker() {
     return () => {
       isCancelled = true;
     };
-  }, [initialAutoUnlockVaultId, loadTrainingPayload]);
+  }, [initialAutoUnlockVaultId, isRemoteAuthReady, isRemoteStorage, loadTrainingPayload, remoteUser]);
 
   const rememberCurrentVaultKey = async (cleanVaultId, key) => {
     if (!rememberDevice) return;
 
     try {
-      await rememberVaultKey(cleanVaultId, key);
+      await rememberVaultKey(getRememberedKeyId(cleanVaultId, remoteUser?.id), key);
     } catch {
       // Remembering the device is optional; successful password unlock should still proceed.
+    }
+  };
+
+  const handleRemoteAccountSubmit = async (event) => {
+    event.preventDefault();
+    if (!accountEmail.trim() || accountPassword.length < 8) return;
+
+    setAccountStatus('loading');
+    setAccountMessage('');
+
+    try {
+      if (accountMode === 'signup') {
+        const result = await signUpRemoteAccount(accountEmail, accountPassword);
+        if (!result.session) {
+          setAccountStatus('success');
+          setAccountMessage('Cuenta creada. Confirma el correo y después inicia sesión.');
+          setAccountMode('signin');
+          return;
+        }
+        setRemoteSession(result.session);
+        setAccountMessage('Cuenta creada correctamente.');
+      } else {
+        const session = await signInRemoteAccount(accountEmail, accountPassword);
+        setRemoteSession(session);
+      }
+
+      setAccountPassword('');
+      setAccountStatus('success');
+    } catch (error) {
+      setAccountStatus('error');
+      setAccountMessage(error.message || 'No se pudo autenticar la cuenta.');
+    }
+  };
+
+  const handleRemoteSignOut = async () => {
+    try {
+      await lockApp();
+      await signOutRemoteAccount();
+      setRemoteSession(null);
+      setAccountStatus('idle');
+      setAccountMessage('');
+    } catch (error) {
+      setAccountStatus('error');
+      setAccountMessage(error.message || 'No se pudo cerrar la sesión.');
     }
   };
 
@@ -219,13 +328,15 @@ export default function GymTracker() {
           return;
         }
 
-        const { key, payload } = await unlockEncryptedVault(password, cleanVaultId);
+        const result = await unlockEncryptedVault(password, cleanVaultId);
+        const { key, payload } = result;
         await rememberCurrentVaultKey(cleanVaultId, key);
-        loadTrainingPayload(payload, key);
+        loadTrainingPayload(payload, key, result);
       } else if (hasVault) {
-        const { key, payload } = await unlockEncryptedVault(password);
+        const result = await unlockEncryptedVault(password);
+        const { key, payload } = result;
         await rememberCurrentVaultKey(cleanVaultId, key);
-        loadTrainingPayload(payload, key);
+        loadTrainingPayload(payload, key, result);
       } else {
         const payload = {
           trainingText: normalizeChatText(initialTrainingText),
@@ -233,13 +344,43 @@ export default function GymTracker() {
           entryEdits: {},
           deletedEntryIds: {},
         };
-        const { key } = await createEncryptedVault(password, payload);
+        const result = await createEncryptedVault(password, payload);
+        const { key } = result;
         await rememberCurrentVaultKey(cleanVaultId, key);
         setHasVault(true);
-        loadTrainingPayload(payload, key);
+        loadTrainingPayload(payload, key, result);
       }
     } catch {
       setAuthError('Contraseña incorrecta o datos cifrados corruptos.');
+    } finally {
+      setIsUnlocking(false);
+    }
+  };
+
+  const createRemoteVault = async () => {
+    if (!isRemoteStorage || !remoteUser || password.length < 6 || !vaultId.trim()) return;
+
+    try {
+      setIsUnlocking(true);
+      setAuthError('');
+      const cleanVaultId = vaultId.trim();
+      saveVaultId(cleanVaultId);
+      if (await remoteVaultExists(cleanVaultId)) {
+        setAuthError('Ya existe un vault con ese ID en tu cuenta.');
+        return;
+      }
+
+      const payload = {
+        trainingText: normalizeChatText(initialTrainingText),
+        aliases: {},
+        entryEdits: {},
+        deletedEntryIds: {},
+      };
+      const result = await createEncryptedVault(password, payload, cleanVaultId);
+      await rememberCurrentVaultKey(cleanVaultId, result.key);
+      loadTrainingPayload(payload, result.key, result);
+    } catch (error) {
+      setAuthError(error.message || 'No se pudo crear el vault remoto.');
     } finally {
       setIsUnlocking(false);
     }
@@ -277,12 +418,28 @@ export default function GymTracker() {
     nextEntryEdits = entryEdits,
     nextDeletedEntryIds = deletedEntryIds,
   ) => {
-    await saveEncryptedVault(cryptoKey, {
-      trainingText: nextTrainingText,
-      aliases: nextAliases,
-      entryEdits: nextEntryEdits,
-      deletedEntryIds: nextDeletedEntryIds,
-    }, undefined, vaultId.trim());
+    setSaveStatus('saving');
+    setSaveMessage('');
+
+    try {
+      const metadata = await saveEncryptedVault(cryptoKey, {
+        trainingText: nextTrainingText,
+        aliases: nextAliases,
+        entryEdits: nextEntryEdits,
+        deletedEntryIds: nextDeletedEntryIds,
+      }, {
+        vaultId: vaultId.trim(),
+        expectedRevision: vaultRevision,
+      });
+      setVaultRevision(metadata.revision);
+      setSaveStatus('success');
+      setSaveMessage('Vault cifrado actualizado.');
+      return metadata;
+    } catch (error) {
+      setSaveStatus('error');
+      setSaveMessage(error.message || 'No se pudo actualizar el vault.');
+      throw error;
+    }
   };
 
   const appendTraining = async () => {
@@ -333,7 +490,7 @@ export default function GymTracker() {
 
     try {
       const text = await file.text();
-      await replaceEncryptedVault(text, vaultId.trim());
+      await replaceEncryptedVault(text, vaultId.trim(), vaultRevision);
       await lockApp();
       setHasVault(true);
       setAuthError('Backup importado. Introduce contraseña para desbloquear.');
@@ -347,33 +504,12 @@ export default function GymTracker() {
 
   const lockApp = async () => {
     try {
-      await forgetRememberedVaultKey(vaultId.trim());
+      await forgetRememberedVaultKey(getRememberedKeyId(vaultId.trim(), remoteUser?.id));
     } catch {
       // Locking must still clear in-memory data even if IndexedDB is unavailable.
     }
 
-    setIsUnlocked(false);
-    setCryptoKey(null);
-    setParsedData(null);
-    setTrainingText('');
-    setAliases({});
-    setEntryEdits({});
-    setDeletedEntryIds({});
-    setSelectedForMerge([]);
-    setNewTrainingText('');
-    setEditingEntry(null);
-    setBulkEditingEntries([]);
-    setEditForm(null);
-    setBulkEditFields(getEmptyBulkEditFields());
-    setRecordsFocus(null);
-    setPassword('');
-    setRememberDevice(false);
-    setActiveTab('progress');
-    setAppMode(READ_MODE);
-    setShowEditModeModal(false);
-    setEditModePassword('');
-    setEditModeError('');
-    setIsCheckingEditModePassword(false);
+    clearUnlockedState();
   };
 
   const handleUserChange = (user) => {
@@ -404,39 +540,7 @@ export default function GymTracker() {
       setAppMode(READ_MODE);
       return;
     }
-
-    setEditModePassword('');
-    setEditModeError('');
-    setShowEditModeModal(true);
-  };
-
-  const activateEditMode = async (event) => {
-    event.preventDefault();
-    if (!editModePassword) return;
-
-    if (!editPasswordHash && !editPasswordPlain) {
-      setEditModeError('Configura VITE_EDIT_PASSWORD_HASH o VITE_EDIT_PASSWORD.');
-      return;
-    }
-
-    setIsCheckingEditModePassword(true);
-    setEditModeError('');
-
-    try {
-      const isValid = await verifyEditModePassword(editModePassword);
-      if (!isValid) {
-        setEditModeError('Contraseña de edición incorrecta.');
-        return;
-      }
-
-      setAppMode(EDIT_MODE);
-      setShowEditModeModal(false);
-      setEditModePassword('');
-    } catch {
-      setEditModeError('No se pudo comprobar la contraseña.');
-    } finally {
-      setIsCheckingEditModePassword(false);
-    }
+    setAppMode(EDIT_MODE);
   };
 
   const openMergeModal = () => {
@@ -461,11 +565,15 @@ export default function GymTracker() {
       newAliases[rawName] = newName;
     });
 
-    await persistPayload(trainingText, newAliases);
-    setAliases(newAliases);
-    setSelectedForMerge([]);
-    setShowMergeModal(false);
-    if (selectedForMerge.includes(selectedExercise)) setSelectedExercise(newName);
+    try {
+      await persistPayload(trainingText, newAliases);
+      setAliases(newAliases);
+      setSelectedForMerge([]);
+      setShowMergeModal(false);
+      if (selectedForMerge.includes(selectedExercise)) setSelectedExercise(newName);
+    } catch {
+      // persistPayload exposes the conflict or storage error in the global banner.
+    }
   };
 
   const toggleSelection = (exerciseName) => {
@@ -501,10 +609,14 @@ export default function GymTracker() {
       newAliases[rawName] = finalName;
     });
 
-    await persistPayload(trainingText, newAliases);
-    setAliases(newAliases);
-    setRenamingExercise(null);
-    if (selectedExercise === renamingExercise) setSelectedExercise(finalName);
+    try {
+      await persistPayload(trainingText, newAliases);
+      setAliases(newAliases);
+      setRenamingExercise(null);
+      if (selectedExercise === renamingExercise) setSelectedExercise(finalName);
+    } catch {
+      // persistPayload exposes the conflict or storage error in the global banner.
+    }
   };
 
   const openTrainingEditModal = (entry) => {
@@ -711,16 +823,33 @@ export default function GymTracker() {
       <AuthScreen
         hasVault={hasVault}
         isRemoteStorage={isRemoteStorage}
+        isRemoteAuthReady={isRemoteAuthReady}
+        remoteUserEmail={remoteUser?.email || ''}
+        accountEmail={accountEmail}
+        accountPassword={accountPassword}
+        accountMode={accountMode}
+        accountStatus={accountStatus}
+        accountMessage={accountMessage}
         vaultId={vaultId}
         password={password}
         rememberDevice={rememberDevice}
         isUnlocking={isUnlocking}
         isCheckingRememberedDevice={isCheckingRememberedDevice}
         authError={authError}
+        onAccountEmailChange={setAccountEmail}
+        onAccountPasswordChange={setAccountPassword}
+        onAccountModeChange={(mode) => {
+          setAccountMode(mode);
+          setAccountStatus('idle');
+          setAccountMessage('');
+        }}
+        onAccountSubmit={handleRemoteAccountSubmit}
+        onAccountSignOut={handleRemoteSignOut}
         onVaultIdChange={setVaultId}
         onPasswordChange={setPassword}
         onRememberDeviceChange={setRememberDevice}
         onSubmit={handleUnlock}
+        onCreateRemoteVault={createRemoteVault}
         onResetVault={resetVaultToInitialSeed}
       />
     );
@@ -732,6 +861,12 @@ export default function GymTracker() {
 
       <main className="max-w-6xl mx-auto p-4 space-y-6 mt-4 relative">
         <TabNav activeTab={activeTab} canEdit={canEdit} onTabChange={setActiveTab} onModeSelect={handleEditModeRequest} />
+
+        {saveStatus === 'error' && activeTab !== 'training' && (
+          <div role="alert" className="bg-red-500/10 border border-red-500/30 text-red-300 text-sm rounded-xl p-3">
+            {saveMessage}
+          </div>
+        )}
 
         {activeTab === 'training' && canEdit && (
           <TrainingInputPanel
@@ -863,20 +998,6 @@ export default function GymTracker() {
           />
         )}
 
-        {showEditModeModal && (
-          <EditModeModal
-            password={editModePassword}
-            error={editModeError}
-            isChecking={isCheckingEditModePassword}
-            onPasswordChange={setEditModePassword}
-            onCancel={() => {
-              setShowEditModeModal(false);
-              setEditModePassword('');
-              setEditModeError('');
-            }}
-            onSubmit={activateEditMode}
-          />
-        )}
       </main>
     </div>
   );
@@ -926,18 +1047,6 @@ function parseTrainingDate(date) {
   return new Date(fullYear, month - 1, day);
 }
 
-async function verifyEditModePassword(password) {
-  if (editPasswordHash) {
-    return (await sha256Hex(password)) === editPasswordHash;
-  }
-
-  return password === editPasswordPlain;
-}
-
-async function sha256Hex(value) {
-  const bytes = new TextEncoder().encode(value);
-  const digest = await crypto.subtle.digest('SHA-256', bytes);
-  return [...new Uint8Array(digest)]
-    .map((byte) => byte.toString(16).padStart(2, '0'))
-    .join('');
+function getRememberedKeyId(vaultId, remoteUserId) {
+  return remoteUserId ? `${remoteUserId}:${vaultId}` : vaultId;
 }

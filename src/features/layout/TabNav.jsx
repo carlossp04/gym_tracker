@@ -1,4 +1,4 @@
-import { BarChart3, Bot, CalendarDays, ClipboardList, Database, PlusCircle, ShieldCheck, ShieldOff, TrendingUp } from 'lucide-react';
+import { BarChart3, Bot, CalendarDays, ClipboardList, Database, Eye, Pencil, PlusCircle, TrendingUp } from 'lucide-react';
 
 const tabs = ['progress', 'general', 'calendar', 'aiResume', 'training', 'records', 'exercises'];
 
@@ -53,8 +53,8 @@ export default function TabNav({ activeTab, canEdit, onTabChange, onModeSelect }
             canEdit ? `${activeClasses.mode} shadow-lg` : 'text-slate-400 hover:text-white'
           }`}
         >
-          {canEdit ? <ShieldOff size={16} strokeWidth={2.5} /> : <ShieldCheck size={16} strokeWidth={2.5} />}
-          {canEdit ? 'Lectura' : 'Edición'}
+          {canEdit ? <Eye size={16} strokeWidth={2.5} /> : <Pencil size={16} strokeWidth={2.5} />}
+          {canEdit ? 'Modo lectura' : 'Modo edición'}
         </button>
       </div>
     </div>

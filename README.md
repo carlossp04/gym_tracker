@@ -1,16 +1,51 @@
-# React + Vite
+# Gym Tracker
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+Aplicación React/Vite para importar entrenamientos desde WhatsApp, consultar progreso y guardar un vault cifrado localmente o en Supabase.
 
-Currently, two official plugins are available:
+## Desarrollo
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Babel](https://babeljs.io/) (or [oxc](https://oxc.rs) when used in [rolldown-vite](https://vite.dev/guide/rolldown)) for Fast Refresh
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/) for Fast Refresh
+```bash
+npm ci
+npm run dev
+```
 
-## React Compiler
+Copia `.env.example` a `.env.local` para activar Supabase. Sin esas variables, la aplicación usa únicamente `localStorage`.
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+## Seguridad y almacenamiento remoto
 
-## Expanding the ESLint configuration
+El contenido del vault se cifra en el navegador con AES-GCM. La contraseña del vault no se envía a Supabase. El modo remoto requiere además una cuenta de Supabase Auth; son dos credenciales distintas.
 
-If you are developing a production application, we recommend using TypeScript with type-aware lint rules enabled. Check out the [TS template](https://github.com/vitejs/vite/tree/main/packages/create-vite/template-react-ts) for information on how to integrate TypeScript and [`typescript-eslint`](https://typescript-eslint.io) in your project.
+El selector lectura/edición es únicamente una preferencia de interfaz. La autorización real procede de la cuenta propietaria y del desbloqueo criptográfico; no se incluye ninguna contraseña o hash de edición en el bundle.
+
+Ejecuta `supabase-vaults.sql` en el editor SQL de Supabase. Después, habilita Email en **Authentication > Providers**. Las políticas RLS permiten que cada usuario autenticado acceda exclusivamente a sus propios vaults.
+
+### Migración desde el esquema público anterior
+
+El script elimina inmediatamente las políticas anónimas. Por seguridad, los vaults antiguos quedan sin propietario e inaccesibles hasta asignarlos manualmente:
+
+```sql
+select id, owner_id from public.vaults;
+
+update public.vaults
+set owner_id = '<UUID_DEL_USUARIO_EN_AUTH_USERS>'
+where id = '<ID_DEL_VAULT>';
+```
+
+Comprueba primero el usuario correcto en **Authentication > Users**. No asignes un vault a una cuenta sin verificar su propietario. Cuando no queden filas antiguas sin propietario, refuerza la columna:
+
+```sql
+alter table public.vaults alter column owner_id set not null;
+```
+
+## Protección frente a conflictos
+
+Cada vault tiene una `revision`. Las actualizaciones solo se aceptan si la revisión remota coincide con la que abrió el cliente. Si otro dispositivo guardó antes, la aplicación rechaza el cambio y exige volver a abrir el vault; así evita sobrescrituras silenciosas.
+
+Antes de actualizar o borrar, un trigger copia automáticamente la versión cifrada anterior a `vault_history`. El historial solo puede leerlo el propietario autenticado y el cliente no tiene permisos para alterarlo.
+
+## Comprobaciones
+
+```bash
+npm run lint
+npm run build
+```
