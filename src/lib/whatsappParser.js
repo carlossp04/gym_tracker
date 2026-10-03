@@ -21,6 +21,8 @@ const ignoredContentPhrases = [
   '<Multimedia omitido>',
 ];
 
+const manualExercisePrefix = 'GYM_TRACKER_EXERCISE:';
+
 export function normalizeChatText(text) {
   return text.replace(/^\uFEFF/, '').replace(/\r\n/g, '\n');
 }
@@ -34,7 +36,7 @@ export function parseWhatsAppChat(text) {
   let lastExerciseName = null;
 
   const headerRegex = /^\[?(\d{1,2}[/.-]\d{1,2}(?:[/.-]\d{2,4})?),?\s*(\d{1,2}:\d{2}(?::\d{2})?)?.*?[\]-]\s*(.*?):/;
-  const dayRegex = /### (DÍA \d+) ###/;
+  const dayRegex = /^###\s*(.+?)\s*###$/;
   const setRegex = /(\d+)\s*s?\s*x\s*(\d+)\s*r?\s*x\s*([\d.,]+)/i;
 
   lines.forEach((rawLine) => {
@@ -43,7 +45,7 @@ export function parseWhatsAppChat(text) {
 
     const headerMatch = line.match(headerRegex);
     if (headerMatch) {
-      currentDate = normalizeChatDate(headerMatch[1]);
+      const nextDate = normalizeChatDate(headerMatch[1]);
       const rawUser = headerMatch[3]
         ? headerMatch[3].trim().replace(/[\u200E\u200F]/g, '')
         : null;
@@ -52,7 +54,12 @@ export function parseWhatsAppChat(text) {
 
       if (rawUser && !isSystemMessage) {
         if (!users[rawUser]) users[rawUser] = [];
+        if (currentUser !== rawUser || currentDate !== nextDate) {
+          currentDayLabel = null;
+          lastExerciseName = null;
+        }
         currentUser = rawUser;
+        currentDate = nextDate;
       } else {
         currentUser = null;
       }
@@ -66,6 +73,12 @@ export function parseWhatsAppChat(text) {
     const dayMatch = line.match(dayRegex);
     if (dayMatch) {
       currentDayLabel = dayMatch[1];
+      lastExerciseName = null;
+      return;
+    }
+
+    if (line.startsWith(manualExercisePrefix)) {
+      lastExerciseName = line.slice(manualExercisePrefix.length).trim();
       return;
     }
 

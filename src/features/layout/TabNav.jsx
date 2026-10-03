@@ -1,6 +1,6 @@
-import { BarChart3, Bot, CalendarDays, ClipboardList, Database, Eye, Pencil, PlusCircle, TrendingUp } from 'lucide-react';
+import { BarChart3, Bot, CalendarDays, ClipboardList, Database, Eye, LayoutTemplate, Pencil, PlusCircle, TrendingUp } from 'lucide-react';
 
-const tabs = ['progress', 'general', 'calendar', 'aiResume', 'training', 'records', 'exercises'];
+const tabs = ['progress', 'general', 'calendar', 'aiResume', 'training', 'routines', 'records', 'exercises'];
 
 const activeClasses = {
   progress: 'bg-emerald-500 text-slate-950',
@@ -8,6 +8,7 @@ const activeClasses = {
   calendar: 'bg-emerald-500 text-slate-950',
   aiResume: 'bg-amber-300 text-slate-950',
   training: 'bg-emerald-500 text-slate-950',
+  routines: 'bg-fuchsia-500 text-white',
   records: 'bg-cyan-500 text-slate-950',
   exercises: 'bg-purple-500 text-slate-950',
   mode: 'bg-amber-400 text-slate-950',
@@ -19,6 +20,7 @@ const tabLabels = {
   calendar: 'Calendario',
   aiResume: 'AI Resume',
   training: 'Añadir',
+  routines: 'Rutinas',
   records: 'Registros',
   exercises: 'Ejercicios',
 };
@@ -42,6 +44,7 @@ export default function TabNav({ activeTab, canEdit, onTabChange, onModeSelect }
             {tab === 'calendar' && <CalendarDays size={16} strokeWidth={2.5} />}
             {tab === 'aiResume' && <Bot size={16} strokeWidth={2.5} />}
             {tab === 'training' && <PlusCircle size={16} strokeWidth={2.5} />}
+            {tab === 'routines' && <LayoutTemplate size={16} strokeWidth={2.5} />}
             {tab === 'records' && <ClipboardList size={16} strokeWidth={2.5} />}
             {tab === 'exercises' && <Database size={16} strokeWidth={2.5} />}
             {tabLabels[tab]}

@@ -2,6 +2,8 @@
 
 Aplicación React/Vite para importar entrenamientos desde WhatsApp, consultar progreso y guardar un vault cifrado localmente o en Supabase.
 
+Además del formulario manual y la importación desde WhatsApp, permite crear rutinas con varias sesiones. Una sesión iniciada desde plantilla genera sus series objetivo, permite registrar peso y repeticiones reales, marcar cada serie y guardar únicamente las completadas. Las plantillas y el entrenamiento activo forman parte del vault cifrado.
+
 ## Desarrollo
 
 ```bash
