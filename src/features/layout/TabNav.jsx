@@ -1,6 +1,6 @@
 import { BarChart3, Bot, CalendarDays, ClipboardList, Database, Eye, LayoutTemplate, Pencil, PlusCircle, TrendingUp } from 'lucide-react';
 
-const tabs = ['progress', 'general', 'calendar', 'aiResume', 'training', 'routines', 'records', 'exercises'];
+const tabs = ['progress', 'general', 'routines', 'calendar', 'aiResume', 'training', 'records', 'exercises'];
 
 const activeClasses = {
   progress: 'bg-emerald-500 text-slate-950',
