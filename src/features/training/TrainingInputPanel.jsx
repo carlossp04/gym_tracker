@@ -1,5 +1,6 @@
 import { useState } from 'react';
-import { CalendarDays, CheckCircle2, ClipboardPaste, Copy, Download, Dumbbell, FileUp, LayoutTemplate, Play, Plus, Save, Trash2, User, XCircle } from 'lucide-react';
+import { CalendarDays, CheckCircle2, ClipboardPaste, Copy, Dumbbell, LayoutTemplate, Play, Plus, Save, Trash2, User, XCircle } from 'lucide-react';
+import useDraftField from '../../lib/useDraftField';
 
 const MANUAL_MODE = 'manual';
 const PASTE_MODE = 'paste';
@@ -16,21 +17,20 @@ export default function TrainingInputPanel({
   onAppendTraining,
   onAddManualWorkout,
   onStartTemplateWorkout,
-  onExportEncrypted,
-  onImportEncrypted,
+  drafts, onDraftChange, profile, importPreview, onCreateRoutine,
 }) {
-  const [inputMode, setInputMode] = useState(() => routines.length > 0 ? TEMPLATE_MODE : MANUAL_MODE);
-  const [user, setUser] = useState(() => availableUsers[0] || '');
-  const [date, setDate] = useState(getTodayInputValue);
-  const [dayLabel, setDayLabel] = useState('Entrenamiento manual');
-  const [exercise, setExercise] = useState('');
-  const [sets, setSets] = useState('3');
-  const [reps, setReps] = useState('10');
-  const [weight, setWeight] = useState('');
-  const [draftEntries, setDraftEntries] = useState([]);
+  const [inputMode, setInputMode] = useDraftField(drafts, onDraftChange, 'inputMode', () => routines.length > 0 ? TEMPLATE_MODE : MANUAL_MODE);
+  const [user, setUser] = useDraftField(drafts, onDraftChange, 'profile', profile);
+  const [date, setDate] = useDraftField(drafts, onDraftChange, 'manualDate', getTodayInputValue);
+  const [dayLabel, setDayLabel] = useDraftField(drafts, onDraftChange, 'manualName', 'Entrenamiento manual');
+  const [exercise, setExercise] = useDraftField(drafts, onDraftChange, 'manualExercise', '');
+  const [sets, setSets] = useDraftField(drafts, onDraftChange, 'manualSets', '3');
+  const [reps, setReps] = useDraftField(drafts, onDraftChange, 'manualReps', '10');
+  const [weight, setWeight] = useDraftField(drafts, onDraftChange, 'manualWeight', '');
+  const [draftEntries, setDraftEntries] = useDraftField(drafts, onDraftChange, 'manualEntries', []);
   const [manualError, setManualError] = useState('');
-  const [selectedRoutineId, setSelectedRoutineId] = useState(() => routines[0]?.id || '');
-  const [selectedSessionId, setSelectedSessionId] = useState('');
+  const [selectedRoutineId, setSelectedRoutineId] = useDraftField(drafts, onDraftChange, 'launcherRoutine', () => routines[0]?.id || '');
+  const [selectedSessionId, setSelectedSessionId] = useDraftField(drafts, onDraftChange, 'launcherSession', '');
 
   const selectedRoutine = routines.find((routine) => routine.id === selectedRoutineId) || routines[0] || null;
   const selectedSession = selectedRoutine?.sessions.find((session) => session.id === selectedSessionId)
@@ -80,6 +80,7 @@ export default function TrainingInputPanel({
       setExercise('');
       setWeight('');
       setManualError('');
+      onDraftChange('manualDate', undefined);
     }
   };
 
@@ -91,7 +92,6 @@ export default function TrainingInputPanel({
             <h2 className="text-lg font-bold text-white flex items-center gap-2"><Plus className="text-emerald-400" /> Añadir entrenamiento</h2>
             <p className="text-sm text-slate-400 mt-1">Crea el entrenamiento con el formulario o pega un bloque exportado de WhatsApp.</p>
           </div>
-          <BackupActions onExportEncrypted={onExportEncrypted} onImportEncrypted={onImportEncrypted} />
         </div>
 
         <div className="p-5 space-y-5">
@@ -116,6 +116,7 @@ export default function TrainingInputPanel({
                 user,
                 date,
               })}
+              onCreateRoutine={onCreateRoutine}
             />
           ) : inputMode === MANUAL_MODE ? (
             <ManualWorkoutBuilder
@@ -131,6 +132,7 @@ export default function TrainingInputPanel({
             />
           ) : (
             <PasteTrainingForm
+              preview={importPreview}
               value={newTrainingText} isSaving={saveStatus === 'saving'}
               onChange={onNewTrainingTextChange} onSave={onAppendTraining}
             />
@@ -146,13 +148,15 @@ export default function TrainingInputPanel({
 function RoutineLauncher({
   routines, selectedRoutine, selectedSession, user, date, availableUsers, isSaving,
   onRoutineChange, onSessionChange, onUserChange, onDateChange, onStart,
+  onCreateRoutine,
 }) {
   if (routines.length === 0) {
     return (
       <div className="border border-dashed border-slate-700 rounded-2xl p-8 text-center">
         <LayoutTemplate size={36} className="mx-auto text-slate-600 mb-3" />
         <h3 className="font-black text-white">Todavía no hay rutinas</h3>
-        <p className="text-sm text-slate-500 mt-1">Créala primero en la pestaña Rutinas.</p>
+        <p className="text-sm text-slate-400 mt-1">Prepara una sesión y podrás empezarla desde aquí.</p>
+        <button type="button" onClick={onCreateRoutine} className="mt-4 rounded-xl bg-emerald-500 text-slate-950 px-5 py-3 font-bold">Crear mi primera rutina</button>
       </div>
     );
   }
@@ -268,11 +272,12 @@ function ManualWorkoutBuilder(props) {
   );
 }
 
-function PasteTrainingForm({ value, isSaving, onChange, onSave }) {
+function PasteTrainingForm({ value, isSaving, onChange, onSave, preview }) {
   return (
     <div className="space-y-4">
       <textarea value={value} onChange={(event) => onChange(event.target.value)} placeholder="[16/5, 14:26] Masi: ..." className="w-full min-h-48 bg-slate-950 border border-slate-800 rounded-2xl p-4 text-sm text-slate-100 placeholder:text-slate-600 focus:outline-none focus:border-emerald-500/50 font-mono" />
-      <div className="flex justify-end"><button type="button" onClick={onSave} disabled={!value.trim() || isSaving} className="w-full sm:w-auto bg-emerald-500 hover:bg-emerald-400 disabled:bg-slate-800 disabled:text-slate-600 text-slate-950 px-5 py-3 rounded-xl font-black flex items-center justify-center gap-2"><Copy size={16} /> Añadir y cifrar</button></div>
+      {value.trim() && <div className="rounded-xl bg-slate-950 border border-slate-700 p-4 space-y-2"><p className="font-bold">{preview.entries.length} registros detectados · {preview.duplicates} posibles duplicados · {preview.unrecognized} líneas de series no reconocidas</p>{preview.entries.length === 0 && <p className="text-amber-300 text-sm">Revisa el formato: fecha, usuario, ejercicio y series × repeticiones × peso.</p>}<ul className="text-sm text-slate-300 space-y-1 max-h-52 overflow-auto">{preview.entries.map((entry, index) => <li key={index}>{entry.date} · {entry.user} · {entry.exercise}: {entry.sets} × {entry.reps} × {entry.weight} kg</li>)}</ul></div>}
+      <div className="flex justify-end"><button type="button" onClick={onSave} disabled={!preview.entries.length || isSaving} className="w-full sm:w-auto bg-emerald-500 hover:bg-emerald-400 disabled:bg-slate-800 disabled:text-slate-600 text-slate-950 px-5 py-3 rounded-xl font-black flex items-center justify-center gap-2"><Copy size={16} /> Importar registros</button></div>
     </div>
   );
 }
@@ -285,15 +290,6 @@ function ModeButton({ active, icon, label, onClick }) {
 function Field({ label, icon, children }) {
   const Icon = icon;
   return <label className="block"><span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider flex items-center gap-1.5 mb-2">{Icon && <Icon size={13} />}{label}</span>{children}</label>;
-}
-
-function BackupActions({ onExportEncrypted, onImportEncrypted }) {
-  return (
-    <div className="flex gap-2">
-      <button type="button" onClick={onExportEncrypted} className="px-3 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-lg text-xs font-bold flex items-center gap-2"><Download size={14} /> Backup</button>
-      <label className="px-3 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-lg text-xs font-bold flex items-center gap-2 cursor-pointer"><FileUp size={14} /> Importar<input type="file" accept=".txt,.json" className="hidden" onChange={onImportEncrypted} /></label>
-    </div>
-  );
 }
 
 function SaveFeedback({ status, message }) {

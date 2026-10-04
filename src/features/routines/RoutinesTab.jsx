@@ -1,12 +1,13 @@
 import { useState } from 'react';
 import { ArrowDown, ArrowUp, LayoutTemplate, Plus, Save, Sparkles, Trash2 } from 'lucide-react';
 import RoutineImportModal from './RoutineImportModal';
+import useDraftField from '../../lib/useDraftField';
 
-export default function RoutinesTab({ canEdit, routines, exerciseOptions, saveStatus, saveMessage, onSaveRoutines }) {
-  const [selectedRoutineId, setSelectedRoutineId] = useState(() => routines[0]?.id || '');
-  const [selectedSessionId, setSelectedSessionId] = useState('');
-  const [newRoutineName, setNewRoutineName] = useState('');
-  const [newSessionName, setNewSessionName] = useState('');
+export default function RoutinesTab({ canEdit, routines, exerciseOptions, saveStatus, saveMessage, onSaveRoutines, drafts, onDraftChange, onStartSession, profile }) {
+  const [selectedRoutineId, setSelectedRoutineId] = useDraftField(drafts, onDraftChange, 'routineSelection', () => routines[0]?.id || '');
+  const [selectedSessionId, setSelectedSessionId] = useDraftField(drafts, onDraftChange, 'sessionSelection', '');
+  const [newRoutineName, setNewRoutineName] = useDraftField(drafts, onDraftChange, 'newRoutineName', '');
+  const [newSessionName, setNewSessionName] = useDraftField(drafts, onDraftChange, 'newSessionName', '');
   const [showImportModal, setShowImportModal] = useState(false);
   const selectedRoutine = routines.find((routine) => routine.id === selectedRoutineId) || routines[0] || null;
   const selectedSession = selectedRoutine?.sessions.find((session) => session.id === selectedSessionId)
@@ -100,7 +101,7 @@ export default function RoutinesTab({ canEdit, routines, exerciseOptions, saveSt
 
           {selectedRoutine && (
             <section className="bg-slate-900 border border-slate-800 rounded-3xl overflow-hidden">
-              <RoutineHeader key={selectedRoutine.id} routine={selectedRoutine} routines={routines} isSaving={saveStatus === 'saving'} onSaveRoutines={onSaveRoutines} onDelete={deleteRoutine} />
+              <RoutineHeader key={selectedRoutine.id} drafts={drafts} onDraftChange={onDraftChange} routine={selectedRoutine} routines={routines} isSaving={saveStatus === 'saving'} onSaveRoutines={onSaveRoutines} onDelete={deleteRoutine} />
 
               <div className="p-5 border-b border-slate-800 space-y-3">
                 <div className="flex gap-2 overflow-x-auto pb-1">
@@ -115,7 +116,7 @@ export default function RoutinesTab({ canEdit, routines, exerciseOptions, saveSt
               </div>
 
               {selectedSession ? (
-                <SessionEditor key={selectedSession.id} routine={selectedRoutine} session={selectedSession} routines={routines} exerciseOptions={exerciseOptions} isSaving={saveStatus === 'saving'} onSaveRoutines={onSaveRoutines} onDelete={deleteSession} />
+                <SessionEditor key={selectedSession.id} drafts={drafts} onDraftChange={onDraftChange} profile={profile} onStartSession={onStartSession} routine={selectedRoutine} session={selectedSession} routines={routines} exerciseOptions={exerciseOptions} isSaving={saveStatus === 'saving'} onSaveRoutines={onSaveRoutines} onDelete={deleteSession} />
               ) : <p className="p-8 text-center text-slate-500">Añade una sesión a esta rutina.</p>}
             </section>
           )}
@@ -124,6 +125,8 @@ export default function RoutinesTab({ canEdit, routines, exerciseOptions, saveSt
 
       {showImportModal && (
         <RoutineImportModal
+          drafts={drafts}
+          onDraftChange={onDraftChange}
           existingRoutines={routines}
           isSaving={saveStatus === 'saving'}
           onImport={importRoutine}
@@ -134,8 +137,8 @@ export default function RoutinesTab({ canEdit, routines, exerciseOptions, saveSt
   );
 }
 
-function RoutineHeader({ routine, routines, isSaving, onSaveRoutines, onDelete }) {
-  const [name, setName] = useState(routine.name);
+function RoutineHeader({ routine, routines, isSaving, onSaveRoutines, onDelete, drafts, onDraftChange }) {
+  const [name, setName] = useDraftField(drafts, onDraftChange, `routineName:${routine.id}`, routine.name);
 
   const saveName = async () => {
     if (!name.trim()) return;
@@ -151,13 +154,13 @@ function RoutineHeader({ routine, routines, isSaving, onSaveRoutines, onDelete }
   );
 }
 
-function SessionEditor({ routine, session, routines, exerciseOptions, isSaving, onSaveRoutines, onDelete }) {
-  const [name, setName] = useState(session.name);
-  const [exercises, setExercises] = useState(() => session.exercises.map((item) => ({ ...item })));
-  const [exercise, setExercise] = useState('');
-  const [sets, setSets] = useState('3');
-  const [reps, setReps] = useState('10');
-  const [notes, setNotes] = useState('');
+function SessionEditor({ routine, session, routines, exerciseOptions, isSaving, onSaveRoutines, onDelete, drafts, onDraftChange, onStartSession, profile }) {
+  const [name, setName] = useDraftField(drafts, onDraftChange, `sessionName:${session.id}`, session.name);
+  const [exercises, setExercises] = useDraftField(drafts, onDraftChange, `sessionExercises:${session.id}`, () => session.exercises.map((item) => ({ ...item })));
+  const [exercise, setExercise] = useDraftField(drafts, onDraftChange, `sessionExercise:${session.id}`, '');
+  const [sets, setSets] = useDraftField(drafts, onDraftChange, `sessionSets:${session.id}`, '3');
+  const [reps, setReps] = useDraftField(drafts, onDraftChange, `sessionReps:${session.id}`, '10');
+  const [notes, setNotes] = useDraftField(drafts, onDraftChange, `sessionNotes:${session.id}`, '');
   const [error, setError] = useState('');
 
   const addExercise = (event) => {
@@ -166,7 +169,7 @@ function SessionEditor({ routine, session, routines, exerciseOptions, isSaving, 
     const targetReps = Number(reps);
     if (!exercise.trim() || !Number.isInteger(targetSets) || targetSets <= 0 || !Number.isInteger(targetReps) || targetReps <= 0) {
       setError('Completa un ejercicio, series y repeticiones válidas.');
-      return;
+      return false;
     }
     setExercises((current) => [...current, { id: crypto.randomUUID(), exercise: exercise.trim(), targetSets, targetReps, notes: notes.trim() }]);
     setExercise('');
@@ -190,7 +193,8 @@ function SessionEditor({ routine, session, routines, exerciseOptions, isSaving, 
       ...item,
       sessions: item.sessions.map((entry) => entry.id === session.id ? { ...entry, name: name.trim(), exercises } : entry),
     }));
-    if (await onSaveRoutines(nextRoutines)) setError('');
+    if (await onSaveRoutines(nextRoutines)) { setError(''); return true; }
+    return false;
   };
 
   const moveExercise = (index, direction) => {
@@ -239,7 +243,8 @@ function SessionEditor({ routine, session, routines, exerciseOptions, isSaving, 
       </div>
 
       {error && <p className="text-sm text-red-300 bg-red-500/10 border border-red-500/30 rounded-xl p-3">{error}</p>}
-      <div className="flex justify-end"><button type="button" onClick={saveSession} disabled={isSaving || exercises.length === 0} className={primaryButtonClasses}><Save size={17} /> Guardar sesión</button></div>
+      <div className="flex flex-wrap justify-end gap-3"><button type="button" onClick={saveSession} disabled={isSaving || exercises.length === 0} className={secondaryButtonClasses}><Save size={17} /> Guardar sesión</button><button type="button" onClick={async () => { if (await saveSession()) await onStartSession(routine.id, session.id, { ...session, name: name.trim(), exercises }); }} disabled={isSaving || exercises.length === 0 || !profile?.trim()} className={primaryButtonClasses}>Guardar y entrenar ahora →</button></div>
+      {!profile?.trim() && <p className="text-sm text-amber-300">Indica tu nombre en Hoy para empezar esta sesión.</p>}
     </div>
   );
 }

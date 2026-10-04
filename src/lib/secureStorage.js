@@ -5,8 +5,8 @@ const VAULT_ID_KEY = 'gym-tracker.last-vault-id.v1';
 const REMEMBERED_KEYS_DB = 'gym-tracker.remembered-keys.v1';
 const REMEMBERED_KEYS_STORE = 'vault-keys';
 const DEFAULT_VAULT_ID = 'entrenamientos';
-const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
-const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
+const supabaseUrl = typeof window === 'undefined' ? undefined : import.meta.env.VITE_SUPABASE_URL;
+const supabaseAnonKey = typeof window === 'undefined' ? undefined : import.meta.env.VITE_SUPABASE_ANON_KEY;
 const supabase = supabaseUrl && supabaseAnonKey ? createClient(supabaseUrl, supabaseAnonKey) : null;
 const encoder = new TextEncoder();
 const decoder = new TextDecoder();
@@ -66,6 +66,46 @@ export async function remoteVaultExists(vaultId) {
   return Boolean(record);
 }
 
+export async function listRemoteVaults() {
+  if (!supabase) return [];
+  const user = await requireRemoteUser();
+  const { data, error } = await supabase.from('vaults').select('id').eq('owner_id', user.id).order('id');
+  if (error) throw error;
+  return data || [];
+}
+
+export async function discardPendingVault(vaultId) {
+  localStorage.removeItem(`${STORAGE_KEY}.pending:${await storageScope(vaultId)}`);
+}
+
+async function storageScope(vaultId) {
+  const session = supabase ? await getRemoteSession() : null;
+  return `${session?.user.id || 'local'}:${normalizeVaultId(vaultId)}`;
+}
+
+async function recordForUnlock(vaultId) {
+  const scope = await storageScope(vaultId);
+  if (!supabase) return { record: readRecord(), scope };
+  try {
+    return { record: await fetchRemoteRecord(vaultId), scope };
+  } catch (error) {
+    if (localStorage.getItem(`${STORAGE_KEY}.scope`) !== scope) throw error;
+    const record = readRecord();
+    if (!record) throw error;
+    return { record, scope, offline: true };
+  }
+}
+
+async function recoverPending(result, scope) {
+  const raw = localStorage.getItem(`${STORAGE_KEY}.pending:${scope}`);
+  if (!raw) return result;
+  const pending = JSON.parse(raw);
+  // A different encryption salt means this is a replaced vault, not a draft to merge.
+  if (pending.salt !== readRecord()?.salt) return result;
+  const payload = await decryptRecord(pending, result.key);
+  return { ...result, payload, revision: pending.baseRevision, pending: true, conflict: pending.baseRevision !== result.revision };
+}
+
 export async function createEncryptedVault(password, payload, vaultId) {
   const salt = crypto.getRandomValues(new Uint8Array(16));
   const key = await deriveKey(password, salt);
@@ -78,7 +118,7 @@ export async function createEncryptedVault(password, payload, vaultId) {
 }
 
 export async function unlockEncryptedVault(password, vaultId) {
-  const record = supabase ? await fetchRemoteRecord(vaultId) : readRecord();
+  const { record, scope, offline } = await recordForUnlock(vaultId);
   if (!record) return null;
   writeLocalRecord(record);
 
@@ -87,26 +127,30 @@ export async function unlockEncryptedVault(password, vaultId) {
   const ciphertext = base64ToBytes(record.ciphertext);
   const key = await deriveKey(password, salt);
   const plaintext = await crypto.subtle.decrypt({ name: 'AES-GCM', iv }, key, ciphertext);
-
-  return {
+  localStorage.setItem(`${STORAGE_KEY}.scope`, scope);
+  return recoverPending({
     key,
     payload: JSON.parse(decoder.decode(plaintext)),
     revision: normalizeRevision(record.revision),
     updatedAt: record.updatedAt,
-  };
+    offline,
+  }, scope);
 }
 
 export async function unlockEncryptedVaultWithKey(key, vaultId) {
-  const record = supabase ? await fetchRemoteRecord(vaultId) : readRecord();
+  const { record, scope, offline } = await recordForUnlock(vaultId);
   if (!record) return null;
   writeLocalRecord(record);
 
-  return {
+  const payload = await decryptRecord(record, key);
+  localStorage.setItem(`${STORAGE_KEY}.scope`, scope);
+  return recoverPending({
     key,
-    payload: await decryptRecord(record, key),
+    payload,
     revision: normalizeRevision(record.revision),
     updatedAt: record.updatedAt,
-  };
+    offline,
+  }, scope);
 }
 
 export async function saveEncryptedVault(key, payload, options = {}) {
@@ -116,9 +160,6 @@ export async function saveEncryptedVault(key, payload, options = {}) {
   if (!salt) throw new Error('No se encontró la sal criptográfica del vault.');
 
   const currentRevision = normalizeRevision(currentRecord?.revision);
-  if (!supabase && expectedRevision != null && currentRevision !== expectedRevision) {
-    throw createConflictError();
-  }
 
   const iv = crypto.getRandomValues(new Uint8Array(12));
   const plaintext = encoder.encode(JSON.stringify(payload));
@@ -136,15 +177,29 @@ export async function saveEncryptedVault(key, payload, options = {}) {
     revision: expectedRevision == null ? 1 : expectedRevision + 1,
   };
 
-  const savedRecord = supabase
-    ? await persistRemoteRecord(vaultId, record, expectedRevision)
-    : record;
+  const scope = await storageScope(vaultId);
+  const pendingKey = `${STORAGE_KEY}.pending:${scope}`;
+  if (expectedRevision != null) localStorage.setItem(pendingKey, JSON.stringify({ ...record, baseRevision: expectedRevision }));
+  if (!supabase && expectedRevision != null && currentRevision !== expectedRevision) {
+    const error = createConflictError(); error.pendingSaved = true; throw error;
+  }
+
+  let savedRecord;
+  try {
+    savedRecord = supabase ? await persistRemoteRecord(vaultId, record, expectedRevision) : record;
+  } catch (error) {
+    error.pendingSaved = expectedRevision != null;
+    throw error;
+  }
   writeLocalRecord(savedRecord);
+  localStorage.setItem(`${STORAGE_KEY}.scope`, scope);
+  localStorage.removeItem(pendingKey);
   return { revision: savedRecord.revision, updatedAt: savedRecord.updatedAt };
 }
 
 export function exportEncryptedVault() {
-  return localStorage.getItem(STORAGE_KEY);
+  const scope = localStorage.getItem(`${STORAGE_KEY}.scope`);
+  return (scope && localStorage.getItem(`${STORAGE_KEY}.pending:${scope}`)) || localStorage.getItem(STORAGE_KEY);
 }
 
 export async function replaceEncryptedVault(serializedVault, vaultId, expectedRevision) {
@@ -166,10 +221,12 @@ export async function replaceEncryptedVault(serializedVault, vaultId, expectedRe
     ? await updateRemoteRecord(vaultId, nextRecord, expectedRevision)
     : nextRecord;
   writeLocalRecord(savedRecord);
+  localStorage.removeItem(`${STORAGE_KEY}.pending:${await storageScope(vaultId)}`);
   return { revision: savedRecord.revision, updatedAt: savedRecord.updatedAt };
 }
 
 export async function deleteEncryptedVault(vaultId) {
+  localStorage.removeItem(`${STORAGE_KEY}.pending:${await storageScope(vaultId)}`);
   localStorage.removeItem(STORAGE_KEY);
   try {
     await forgetRememberedVaultKey(vaultId);

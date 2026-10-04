@@ -1,6 +1,8 @@
 import { Check, CircleStop, Dumbbell, Plus, Save, Trash2, X } from 'lucide-react';
+import { useState } from 'react';
 
 export default function ActiveWorkoutPanel({ workout, saveStatus, saveMessage, onWorkoutChange, onSaveProgress, onFinish, onCancel }) {
+  const [showFinish, setShowFinish] = useState(false);
   const allSets = workout.exercises.flatMap((exercise) => exercise.sets);
   const completedSets = allSets.filter((set) => set.completed).length;
   const completion = allSets.length > 0 ? Math.round((completedSets / allSets.length) * 100) : 0;
@@ -9,7 +11,11 @@ export default function ActiveWorkoutPanel({ workout, saveStatus, saveMessage, o
     onWorkoutChange({
       ...workout,
       exercises: workout.exercises.map((exercise) => exercise.id === exerciseId
-        ? { ...exercise, sets: exercise.sets.map((set) => set.id === setId ? { ...set, ...patch } : set) }
+        ? { ...exercise, sets: exercise.sets.map((set) => {
+          if (set.id !== setId) return set;
+          const next = { ...set, ...patch };
+          return { ...next, completed: next.completed && Number(next.actualReps) > 0 && Number(next.weight) > 0 };
+        }) }
         : exercise),
     });
   };
@@ -24,14 +30,6 @@ export default function ActiveWorkoutPanel({ workout, saveStatus, saveMessage, o
   const removeExercise = (exerciseId) => {
     if (!window.confirm('¿Omitir este ejercicio del entrenamiento actual?')) return;
     onWorkoutChange({ ...workout, exercises: workout.exercises.filter((exercise) => exercise.id !== exerciseId) });
-  };
-
-  const finishWorkout = () => {
-    const incomplete = allSets.length - completedSets;
-    const message = incomplete > 0
-      ? `Hay ${incomplete} serie(s) sin completar. Solo se guardarán las ${completedSets} marcadas. ¿Finalizar?`
-      : `Se guardarán ${completedSets} series completadas. ¿Finalizar entrenamiento?`;
-    if (window.confirm(message)) onFinish();
   };
 
   return (
@@ -69,11 +67,12 @@ export default function ActiveWorkoutPanel({ workout, saveStatus, saveMessage, o
 
       {saveMessage && <p className={`text-sm rounded-xl border p-3 ${saveStatus === 'error' ? 'text-red-300 bg-red-500/10 border-red-500/30' : 'text-emerald-300 bg-emerald-500/10 border-emerald-500/30'}`}>{saveMessage}</p>}
 
-      <div className="sticky bottom-4 z-20 bg-slate-900/95 backdrop-blur border border-slate-700 rounded-2xl p-3 shadow-2xl flex flex-col sm:flex-row gap-2">
+      <div className="sticky bottom-[calc(5rem+env(safe-area-inset-bottom))] md:bottom-4 z-20 bg-slate-900/95 backdrop-blur border border-slate-700 rounded-2xl p-3 shadow-2xl flex flex-wrap gap-2">
         <button type="button" onClick={onCancel} disabled={saveStatus === 'saving'} className="px-4 py-3 rounded-xl text-sm font-bold text-red-300 hover:bg-red-500/10 flex items-center justify-center gap-2"><X size={17} /> Descartar</button>
-        <button type="button" onClick={onSaveProgress} disabled={saveStatus === 'saving'} className="sm:ml-auto px-5 py-3 rounded-xl text-sm font-black bg-slate-800 hover:bg-slate-700 disabled:text-slate-600 text-white flex items-center justify-center gap-2"><Save size={17} /> Guardar progreso</button>
-        <button type="button" onClick={finishWorkout} disabled={saveStatus === 'saving' || completedSets === 0} className="px-5 py-3 rounded-xl text-sm font-black bg-emerald-500 hover:bg-emerald-400 disabled:bg-slate-800 disabled:text-slate-600 text-slate-950 flex items-center justify-center gap-2"><CircleStop size={17} /> Finalizar</button>
+        {saveStatus === 'error' && <button type="button" onClick={onSaveProgress} className="px-4 py-3 rounded-xl text-sm font-bold bg-slate-800 text-white flex items-center gap-2"><Save size={17} /> Reintentar guardado</button>}
+        <button type="button" onClick={() => setShowFinish(true)} disabled={saveStatus === 'saving' || completedSets === 0} className="ml-auto px-5 py-3 rounded-xl text-sm font-black bg-emerald-500 hover:bg-emerald-400 disabled:bg-slate-800 disabled:text-slate-600 text-slate-950 flex items-center justify-center gap-2"><CircleStop size={17} /> Finalizar</button>
       </div>
+      {showFinish && <div className="fixed inset-0 z-50 bg-black/80 flex items-center justify-center p-4" role="dialog" aria-modal="true" aria-labelledby="finish-title"><section className="bg-slate-900 border border-slate-700 rounded-3xl p-6 w-full max-w-md space-y-4"><h2 id="finish-title" className="text-xl font-black">Resumen de la sesión</h2><p className="text-slate-300">Se guardarán {completedSets} series completadas de {allSets.length}.</p>{allSets.length > completedSets && <p className="text-amber-300 text-sm">Quedan {allSets.length - completedSets} series pendientes. Puedes volver para completarlas o finalizar solo con las marcadas.</p>}<ul className="space-y-2 text-sm max-h-56 overflow-auto">{workout.exercises.map((exercise) => <li key={exercise.id} className="flex justify-between gap-3"><span>{exercise.exercise}</span><span className="whitespace-nowrap">{exercise.sets.filter((set) => set.completed).length}/{exercise.sets.length}</span></li>)}</ul><div className="flex gap-3"><button autoFocus type="button" disabled={saveStatus === 'saving'} onClick={() => setShowFinish(false)} className="flex-1 bg-slate-800 rounded-xl py-3 font-bold">Seguir entrenando</button><button type="button" disabled={saveStatus === 'saving'} onClick={async () => { if (await onFinish()) setShowFinish(false); }} className="flex-1 bg-emerald-500 text-slate-950 rounded-xl py-3 font-bold">Guardar y finalizar</button></div>{saveStatus === 'error' && <p role="alert" className="text-sm text-red-300">{saveMessage}</p>}</section></div>}
     </div>
   );
 }
@@ -81,11 +80,11 @@ export default function ActiveWorkoutPanel({ workout, saveStatus, saveMessage, o
 function ExerciseCard({ exercise, index, onUpdateSet, onUpdateExercise, onRemove }) {
   const completed = exercise.sets.filter((set) => set.completed).length;
   const applyWeightToAll = (event) => {
-    const weight = event.currentTarget.form.elements.bulkWeight.value;
+    const weight = event.currentTarget.elements.bulkWeight.value;
     if (!weight || Number(weight) <= 0) return;
     onUpdateExercise((current) => ({
       ...current,
-      sets: current.sets.map((set) => ({ ...set, weight, completed: false })),
+      sets: current.sets.map((set) => set.completed ? set : { ...set, weight }),
     }));
   };
 
@@ -116,25 +115,25 @@ function ExerciseCard({ exercise, index, onUpdateSet, onUpdateExercise, onRemove
   return (
     <article className="bg-slate-950/70 border border-slate-800 rounded-2xl overflow-hidden">
       <div className="px-4 py-4 border-b border-slate-800 flex flex-col lg:flex-row lg:items-center gap-3">
-        <div className="min-w-0 flex-1"><p className="text-xs text-slate-600 font-black">EJERCICIO {index + 1}</p><h3 className="text-lg font-black text-white truncate">{exercise.exercise}</h3>{exercise.notes && <p className="text-xs text-amber-300 mt-1">{exercise.notes}</p>}<p className="text-xs text-emerald-400 mt-1">{completed}/{exercise.sets.length} series</p></div>
+        <div className="min-w-0 flex-1"><p className="text-xs text-slate-400 font-black">EJERCICIO {index + 1}</p><h3 className="text-lg font-black text-white break-words">{exercise.exercise}</h3>{exercise.notes && <p className="text-xs text-amber-300 mt-1">{exercise.notes}</p>}{exercise.previousWeight != null && <p className="text-xs text-slate-400 mt-1">Último peso registrado: {exercise.previousWeight} kg</p>}<p className="text-xs text-emerald-400 mt-1">{completed}/{exercise.sets.length} series</p></div>
         <form className="flex gap-2" onSubmit={(event) => { event.preventDefault(); applyWeightToAll(event); }}>
           <input name="bulkWeight" type="number" min="0.1" step="0.1" defaultValue={exercise.sets.find((set) => set.weight)?.weight || ''} placeholder="Peso kg" className="w-28 h-10 bg-slate-900 border border-slate-700 rounded-lg px-3 text-sm text-white" />
-          <button className="h-10 px-3 bg-slate-800 hover:bg-slate-700 rounded-lg text-xs font-black text-slate-200">Aplicar a todas</button>
+          <button className="h-10 px-3 bg-slate-800 hover:bg-slate-700 rounded-lg text-xs font-black text-slate-200">Aplicar a pendientes</button>
         </form>
         <button type="button" onClick={onRemove} className="p-2 text-slate-600 hover:text-red-300 self-end lg:self-auto" title="Omitir ejercicio"><Trash2 size={17} /></button>
       </div>
 
-      <div className="overflow-x-auto">
-        <div className="min-w-[530px]">
-          <div className="grid grid-cols-[4rem_1fr_1fr_5rem] gap-3 px-4 py-2 text-[10px] font-black uppercase tracking-wider text-slate-600"><span>Serie</span><span>Reps reales</span><span>Peso</span><span className="text-center">Hecha</span></div>
+      <div>
+        <div>
+          <div className="grid grid-cols-[2rem_minmax(0,1fr)_minmax(0,1fr)_2.75rem] sm:grid-cols-[4rem_1fr_1fr_5rem] gap-2 px-3 py-2 text-[10px] font-black uppercase tracking-wider text-slate-400"><span>Serie</span><span>Reps</span><span>Peso kg</span><span className="text-center">Hecha</span></div>
           {exercise.sets.map((set) => {
             const canComplete = Number(set.actualReps) > 0 && Number(set.weight) > 0;
             return (
-              <div key={set.id} className={`grid grid-cols-[4rem_1fr_1fr_5rem] gap-3 items-center px-4 py-3 border-t border-slate-800/70 ${set.completed ? 'bg-emerald-500/[0.06]' : ''}`}>
+              <div key={set.id} className={`grid grid-cols-[2rem_minmax(0,1fr)_minmax(0,1fr)_2.75rem] sm:grid-cols-[4rem_1fr_1fr_5rem] gap-2 items-center px-3 py-3 border-t border-slate-800/70 ${set.completed ? 'bg-emerald-500/[0.06]' : ''}`}>
                 <div className="flex items-center gap-1"><span className="font-black text-white">{set.number}</span><button type="button" onClick={() => removeSet(set.id)} disabled={exercise.sets.length <= 1} className="p-1 text-slate-700 hover:text-red-300 disabled:hidden"><Trash2 size={12} /></button></div>
-                <label className="relative"><input type="number" min="1" step="1" value={set.actualReps} onChange={(event) => onUpdateSet(set.id, { actualReps: event.target.value, completed: false })} className={setInputClasses} /><span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-slate-600">/ {set.targetReps}</span></label>
-                <label className="relative"><input type="number" min="0.1" step="0.1" value={set.weight} onChange={(event) => onUpdateSet(set.id, { weight: event.target.value, completed: false })} className={setInputClasses} /><span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-slate-600">kg</span></label>
-                <div className="flex justify-center"><button type="button" onClick={() => canComplete && onUpdateSet(set.id, { completed: !set.completed })} disabled={!canComplete} className={`w-10 h-10 rounded-xl border flex items-center justify-center transition-all ${set.completed ? 'bg-emerald-500 border-emerald-400 text-slate-950' : canComplete ? 'bg-slate-900 border-slate-700 text-transparent hover:border-emerald-500' : 'bg-slate-900 border-slate-800 text-transparent opacity-40'}`} aria-label={`Marcar serie ${set.number}`}><Check size={20} strokeWidth={3} /></button></div>
+                <label className="relative"><input aria-label={`Repeticiones serie ${set.number} de ${exercise.exercise}`} inputMode="numeric" type="number" min="1" step="1" value={set.actualReps} onChange={(event) => onUpdateSet(set.id, { actualReps: event.target.value })} className={setInputClasses} /><span className="block text-[10px] text-slate-400 mt-1">Objetivo: {set.targetReps}</span></label>
+                <label><input aria-label={`Peso serie ${set.number} de ${exercise.exercise}`} inputMode="decimal" type="number" min="0.1" step="0.1" value={set.weight} onChange={(event) => onUpdateSet(set.id, { weight: event.target.value })} className={setInputClasses} /></label>
+                <div className="flex justify-center"><button type="button" onClick={() => canComplete && onUpdateSet(set.id, { completed: !set.completed })} disabled={!canComplete} aria-pressed={set.completed} className={`w-11 h-11 rounded-xl border flex items-center justify-center transition-all ${set.completed ? 'bg-emerald-500 border-emerald-400 text-slate-950' : canComplete ? 'bg-slate-900 border-slate-700 text-slate-500 hover:border-emerald-500' : 'bg-slate-900 border-slate-800 text-slate-700 opacity-40'}`} aria-label={`Marcar serie ${set.number} de ${exercise.exercise}`}><Check size={20} strokeWidth={3} /></button></div>
               </div>
             );
           })}
@@ -150,4 +149,4 @@ function formatDate(value) {
   return `${day}/${month}/${year}`;
 }
 
-const setInputClasses = 'w-full h-10 bg-slate-900 border border-slate-700 rounded-lg pl-3 pr-12 text-white focus:outline-none focus:border-emerald-500';
+const setInputClasses = 'w-full min-w-0 h-11 bg-slate-900 border border-slate-700 rounded-lg px-2 text-white focus:outline-none focus:border-emerald-500';

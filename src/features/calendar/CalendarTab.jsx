@@ -1,14 +1,15 @@
 import { CalendarDays, ChevronLeft, ChevronRight, User, Users } from 'lucide-react';
-import { useMemo, useState } from 'react';
+import { useMemo } from 'react';
+import useDraftField from '../../lib/useDraftField';
 import SearchableSelect from '../../components/SearchableSelect';
 
 const ALL_USERS_OPTION = 'Todos los usuarios';
 const weekDays = ['L', 'M', 'X', 'J', 'V', 'S', 'D'];
 const monthFormatter = new Intl.DateTimeFormat('es-ES', { month: 'long', year: 'numeric' });
 
-export default function CalendarTab({ processedData, availableUsers, userColors, onOpenRecordsDay }) {
-  const [selectedUser, setSelectedUser] = useState(ALL_USERS_OPTION);
-  const [selectedMonthKey, setSelectedMonthKey] = useState('');
+export default function CalendarTab({ processedData, availableUsers, userColors, onOpenRecordsDay, drafts, onDraftChange }) {
+  const [selectedUser, setSelectedUser] = useDraftField(drafts, onDraftChange, 'calendarUser', drafts.profile || ALL_USERS_OPTION);
+  const [selectedMonthKey, setSelectedMonthKey] = useDraftField(drafts, onDraftChange, 'calendarMonth', '');
 
   const calendarData = useMemo(() => buildCalendarData(processedData), [processedData]);
   const monthKeys = calendarData.monthKeys;

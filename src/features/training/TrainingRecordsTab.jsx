@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react';
 import { CalendarDays, FilterX, ListX, Pencil, Search, SquarePen, Trash2, X } from 'lucide-react';
 import { normalizeSearchText } from '../../lib/textSearch';
+import useDraftField from '../../lib/useDraftField';
 
 const ALL_OPTIONS = 'Todos';
 
@@ -13,8 +14,12 @@ export default function TrainingRecordsTab({
   onDeleteTrainingEntry,
   onDeleteWorkoutExercise,
   onDeleteSelectedTrainingEntries,
+  drafts, onDraftChange, onRepeatWorkout, onSaveAsRoutine, isSaving,
 }) {
-  const [filters, setFilters] = useState(() => getInitialFilters(focusedWorkout));
+  const [savedFilters, setSavedFilters] = useDraftField(drafts, onDraftChange, 'historyFilters', () => ({ ...getInitialFilters(null), user: drafts.profile || ALL_OPTIONS }));
+  const [focusedFilters, setFocusedFilters] = useState(() => getInitialFilters(focusedWorkout));
+  const filters = focusedWorkout ? focusedFilters : savedFilters;
+  const setFilters = focusedWorkout ? setFocusedFilters : setSavedFilters;
   const [selectedEntryIds, setSelectedEntryIds] = useState([]);
 
   const users = useMemo(
@@ -145,10 +150,10 @@ export default function TrainingRecordsTab({
                 </>
               )}
               <span className="text-xs font-mono text-slate-400 bg-slate-950 border border-slate-800 rounded-full px-3 py-1">
-                {filteredEntries.length} de {trainingEntries.length} sets
+                {filteredEntries.reduce((sum, entry) => sum + entry.sets, 0)} series · {filteredEntries.length} registros
               </span>
               <span className="text-xs font-mono text-cyan-300 bg-cyan-500/10 border border-cyan-500/20 rounded-full px-3 py-1">
-                {groupedEntries.length} entrenos
+                {groupedEntries.length} sesiones
               </span>
             </div>
           </div>
@@ -217,7 +222,7 @@ export default function TrainingRecordsTab({
         </div>
 
         <div className="max-h-[70dvh] overflow-auto">
-          <table className="w-full text-left min-w-[860px]">
+          <table className="w-full text-left min-w-[860px] hidden md:table">
             <thead className="sticky top-0 z-10 bg-slate-950 text-slate-500 uppercase text-xs tracking-wider font-bold shadow-lg shadow-slate-950/30">
               <tr>
                 {canEdit && (
@@ -244,6 +249,9 @@ export default function TrainingRecordsTab({
             <tbody className="text-sm">
               {groupedEntries.map((group, groupIndex) => (
                 <WorkoutGroup
+                  onRepeatWorkout={onRepeatWorkout}
+                  onSaveAsRoutine={onSaveAsRoutine}
+                  isSaving={isSaving}
                   key={group.key}
                   canEdit={canEdit}
                   group={group}
@@ -265,6 +273,7 @@ export default function TrainingRecordsTab({
               )}
             </tbody>
           </table>
+          <div className="md:hidden divide-y divide-slate-800">{groupedEntries.map((group) => <section key={group.key} className="p-4 space-y-3"><div><h3 className="font-bold text-emerald-300">{group.dayLabel}</h3><p className="text-sm text-slate-400">{group.date} · {group.user} · {group.entries.reduce((sum, entry) => sum + entry.sets, 0)} series</p></div><WorkoutActions entries={group.entries} isSaving={isSaving} onRepeat={onRepeatWorkout} onSaveAsRoutine={onSaveAsRoutine} />{group.entries.map((entry) => <div key={entry.id} className="rounded-xl bg-slate-950 p-3 flex items-center gap-3">{canEdit && <input type="checkbox" checked={selectedEntryIdSet.has(entry.id)} onChange={() => toggleEntrySelection(entry.id)} aria-label={`Seleccionar ${entry.exercise}`} className="h-5 w-5 accent-emerald-500" />}<div className="flex-1 min-w-0"><p className="font-bold break-words">{entry.exercise}</p><p className="text-sm text-slate-300">{entry.sets} × {entry.reps} · <span className="text-emerald-300">{entry.weight} kg</span></p></div>{canEdit && <div className="flex"><button type="button" aria-label={`Editar ${entry.exercise}`} onClick={() => onOpenTrainingEdit(entry)} className="p-3 text-slate-300"><Pencil size={18} /></button><button type="button" aria-label={`Eliminar ${entry.exercise}`} onClick={() => onDeleteTrainingEntry(entry)} className="p-3 text-red-300"><Trash2 size={18} /></button></div>}</div>)}</section>)}{groupedEntries.length === 0 && <p className="p-6 text-slate-400">Sin registros con esos filtros.</p>}</div>
         </div>
       </section>
     </div>
@@ -281,6 +290,7 @@ function WorkoutGroup({
   onDeleteWorkoutExercise,
   selectedEntryIdSet,
   onToggleEntrySelection,
+  onRepeatWorkout, onSaveAsRoutine, isSaving,
 }) {
   const stripeClass = groupIndex % 2 === 0 ? 'border-l-4 border-l-emerald-500/80' : 'border-l-4 border-l-cyan-500/80';
   const rowBgClass = groupIndex % 2 === 0 ? 'bg-emerald-500/[0.03]' : 'bg-cyan-500/[0.03]';
@@ -307,9 +317,10 @@ function WorkoutGroup({
               <span>{group.dayLabel}</span>
             </div>
             <div className="flex flex-wrap gap-2 text-[11px] font-mono text-slate-400">
-              <span className="bg-slate-950/70 border border-slate-800 rounded-full px-2 py-1">{group.entries.length} sets</span>
+              <span className="bg-slate-950/70 border border-slate-800 rounded-full px-2 py-1">{group.entries.reduce((sum, entry) => sum + entry.sets, 0)} series</span>
               <span className="bg-slate-950/70 border border-slate-800 rounded-full px-2 py-1">{totalVolume} kg vol</span>
             </div>
+            <WorkoutActions entries={group.entries} isSaving={isSaving} onRepeat={onRepeatWorkout} onSaveAsRoutine={onSaveAsRoutine} />
           </div>
         </td>
       </tr>
@@ -397,6 +408,10 @@ function groupEntriesByWorkout(entries) {
   });
 
   return groups;
+}
+
+function WorkoutActions({ entries, isSaving, onRepeat, onSaveAsRoutine }) {
+  return <div className="flex flex-wrap gap-2"><button type="button" disabled={isSaving} onClick={() => onRepeat(entries)} className="rounded-lg bg-slate-800 px-3 py-2 text-xs font-bold text-slate-200 disabled:opacity-40">Repetir hoy</button><button type="button" disabled={isSaving} onClick={() => onSaveAsRoutine(entries)} className="rounded-lg bg-slate-800 px-3 py-2 text-xs font-bold text-slate-200 disabled:opacity-40">Guardar como rutina</button></div>;
 }
 
 function parseTrainingDate(date) {

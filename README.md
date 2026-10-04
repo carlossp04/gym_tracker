@@ -6,6 +6,16 @@ Además del formulario manual y la importación desde WhatsApp, permite crear ru
 
 La sección Rutinas incluye un importador asistido por IA. La aplicación genera directrices estrictas junto al texto original, valida la respuesta contra el schema `gym_tracker_routine_v1` y solo entonces permite añadirla al vault. No se envían datos directamente a ningún proveedor de IA desde la aplicación.
 
+## Uso cotidiano
+
+La aplicación se abre en **Hoy**, con acceso a registrar, iniciar o continuar una sesión. La navegación principal contiene Hoy, Rutinas, Historial y Progreso; en móvil permanece al pie de la pantalla. El calendario está dentro del historial y las comparativas dentro de progreso. Las copias de seguridad, la gestión de ejercicios y la exportación para IA están en Opciones.
+
+Las series, los borradores de formularios y rutinas, y las preferencias se guardan automáticamente tras una breve pausa al editar. Los borradores forman parte del contenido cifrado. Espera a ver **Guardado** antes de cerrar; mientras hay cambios pendientes el navegador avisa al abandonar la página. Finalizar muestra una revisión y guarda únicamente las series completadas.
+
+Si falla un guardado remoto, se conserva una copia cifrada pendiente en este navegador y se reintenta al recuperar la conexión o al pulsar Reintentar. Un dispositivo que ya abrió el espacio puede recuperar su copia local si la nube no está disponible, siempre que conserve la sesión de cuenta y pueda desbloquearla. Si otra pestaña o dispositivo ha cambiado la revisión, se detiene la edición: el aviso permite descargar los cambios locales antes de volver a abrir la versión guardada. No se realiza una mezcla automática entre versiones.
+
+Los nuevos espacios empiezan vacíos; los datos de ejemplo se incluyen solo si se marca la opción correspondiente. Los espacios existentes conservan sus datos. La importación desde WhatsApp muestra registros detectados, posibles duplicados y líneas de series no reconocidas antes de guardar. Desde el historial se puede repetir una sesión o convertirla en una rutina; si hay repeticiones variables, la plantilla lo indica para revisarlas.
+
 ## Desarrollo
 
 ```bash
@@ -51,5 +61,6 @@ Antes de actualizar o borrar, un trigger copia automáticamente la versión cifr
 
 ```bash
 npm run lint
+npm test
 npm run build
 ```

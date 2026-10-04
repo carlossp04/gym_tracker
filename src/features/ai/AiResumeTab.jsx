@@ -76,7 +76,7 @@ export default function AiResumeTab({ processedData, availableUsers, userColors 
     <div className="animate-in fade-in slide-in-from-right-4 duration-500 space-y-6">
       <div className="text-center space-y-2 mb-8">
         <h2 className="text-2xl font-black text-white flex items-center justify-center gap-3">
-          <Bot className="text-amber-300" size={32} /> AI Resume
+          <Bot className="text-amber-300" size={32} /> Exportar resumen para IA
         </h2>
         <p className="text-slate-400 text-sm">Genera contexto compacto para pegar en ChatGPT, Gemini u otra IA.</p>
       </div>

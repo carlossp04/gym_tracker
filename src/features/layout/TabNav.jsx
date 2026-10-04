@@ -1,65 +1,18 @@
-import { BarChart3, Bot, CalendarDays, ClipboardList, Database, Eye, LayoutTemplate, Pencil, PlusCircle, TrendingUp } from 'lucide-react';
+import { ClipboardList, House, LayoutTemplate, TrendingUp } from 'lucide-react';
 
-const tabs = ['progress', 'general', 'routines', 'calendar', 'aiResume', 'training', 'records', 'exercises'];
+const tabs = [
+  { id: 'today', label: 'Hoy', icon: House, children: ['training'] },
+  { id: 'routines', label: 'Rutinas', icon: LayoutTemplate, children: [] },
+  { id: 'records', label: 'Historial', icon: ClipboardList, children: ['calendar'] },
+  { id: 'progress', label: 'Progreso', icon: TrendingUp, children: ['general'] },
+];
 
-const activeClasses = {
-  progress: 'bg-emerald-500 text-slate-950',
-  general: 'bg-cyan-500 text-slate-950',
-  calendar: 'bg-emerald-500 text-slate-950',
-  aiResume: 'bg-amber-300 text-slate-950',
-  training: 'bg-emerald-500 text-slate-950',
-  routines: 'bg-fuchsia-500 text-white',
-  records: 'bg-cyan-500 text-slate-950',
-  exercises: 'bg-purple-500 text-slate-950',
-  mode: 'bg-amber-400 text-slate-950',
-};
-
-const tabLabels = {
-  progress: 'Progreso',
-  general: 'General',
-  calendar: 'Calendario',
-  aiResume: 'AI Resume',
-  training: 'Añadir',
-  routines: 'Rutinas',
-  records: 'Registros',
-  exercises: 'Ejercicios',
-};
-
-export default function TabNav({ activeTab, canEdit, onTabChange, onModeSelect }) {
-  const visibleTabs = canEdit ? tabs : tabs.filter((tab) => tab !== 'training');
-
-  return (
-    <div className="flex justify-start md:justify-center mb-6 overflow-x-auto no-scrollbar">
-      <div className="bg-slate-900 p-1.5 rounded-xl border border-slate-800 inline-flex min-w-fit">
-        {visibleTabs.map((tab) => (
-          <button
-            key={tab}
-            onClick={() => onTabChange(tab)}
-            className={`px-5 sm:px-8 py-3 rounded-lg text-sm font-bold transition-all flex items-center gap-2 capitalize ${
-              activeTab === tab ? `${activeClasses[tab]} shadow-lg` : 'text-slate-400 hover:text-white'
-            }`}
-          >
-            {tab === 'progress' && <TrendingUp size={16} strokeWidth={2.5} />}
-            {tab === 'general' && <BarChart3 size={16} strokeWidth={2.5} />}
-            {tab === 'calendar' && <CalendarDays size={16} strokeWidth={2.5} />}
-            {tab === 'aiResume' && <Bot size={16} strokeWidth={2.5} />}
-            {tab === 'training' && <PlusCircle size={16} strokeWidth={2.5} />}
-            {tab === 'routines' && <LayoutTemplate size={16} strokeWidth={2.5} />}
-            {tab === 'records' && <ClipboardList size={16} strokeWidth={2.5} />}
-            {tab === 'exercises' && <Database size={16} strokeWidth={2.5} />}
-            {tabLabels[tab]}
-          </button>
-        ))}
-        <button
-          onClick={onModeSelect}
-          className={`px-5 sm:px-8 py-3 rounded-lg text-sm font-bold transition-all flex items-center gap-2 ${
-            canEdit ? `${activeClasses.mode} shadow-lg` : 'text-slate-400 hover:text-white'
-          }`}
-        >
-          {canEdit ? <Eye size={16} strokeWidth={2.5} /> : <Pencil size={16} strokeWidth={2.5} />}
-          {canEdit ? 'Modo lectura' : 'Modo edición'}
-        </button>
-      </div>
-    </div>
-  );
+export default function TabNav({ activeTab, onTabChange }) {
+  return <nav aria-label="Navegación principal" className="fixed bottom-0 inset-x-0 z-30 border-t border-slate-700 bg-slate-900/95 backdrop-blur md:static md:rounded-2xl md:border md:mb-6 pb-[env(safe-area-inset-bottom)]"><div className="grid grid-cols-4 max-w-3xl mx-auto gap-1 p-2">
+    {tabs.map(({ id, label, icon, children }) => {
+      const Icon = icon;
+      const active = activeTab === id || children.includes(activeTab);
+      return <button key={id} type="button" aria-current={active ? 'page' : undefined} onClick={() => onTabChange(id)} className={`min-h-12 rounded-xl text-xs sm:text-sm font-bold flex flex-col md:flex-row items-center justify-center gap-1 md:gap-2 ${active ? 'bg-emerald-500 text-slate-950' : 'text-slate-300 hover:bg-slate-800'}`}><Icon size={19} />{label}</button>;
+    })}
+  </div></nav>;
 }

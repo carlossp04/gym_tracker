@@ -1,4 +1,5 @@
 import { Cloud, Database, Dumbbell, KeyRound, Lock, LogOut, Mail, ShieldCheck, UserPlus } from 'lucide-react';
+import { useState } from 'react';
 
 export default function AuthScreen({
   hasVault, isRemoteStorage, isRemoteAuthReady, remoteUserEmail,
@@ -6,17 +7,20 @@ export default function AuthScreen({
   vaultId, password, rememberDevice, isUnlocking, isCheckingRememberedDevice, authError,
   onAccountEmailChange, onAccountPasswordChange, onAccountModeChange, onAccountSubmit, onAccountSignOut,
   onVaultIdChange, onPasswordChange, onRememberDeviceChange, onSubmit, onCreateRemoteVault, onResetVault,
+  includeDemo, onIncludeDemoChange, remoteVaults, vaultListMessage,
 }) {
   const needsRemoteAccount = isRemoteStorage && !remoteUserEmail;
+  const [createSpace, setCreateSpace] = useState(false);
+  const isCreating = isRemoteStorage ? createSpace || (remoteVaults.length === 0 && !vaultListMessage) : !hasVault;
 
   return (
     <div className="min-h-screen bg-slate-950 flex items-center justify-center p-4 font-sans selection:bg-emerald-500/30">
       <div className="max-w-md w-full bg-slate-900 border border-slate-800 rounded-3xl p-8 shadow-2xl space-y-6">
         <BrandHeader subtitle={needsRemoteAccount
-          ? 'Identifícate para acceder únicamente a tus vaults.'
+          ? 'Accede a tus entrenamientos desde cualquier dispositivo.'
           : isRemoteStorage
-            ? 'Abre o crea un vault cifrado de tu cuenta.'
-            : hasVault ? 'Desbloquea tus entrenamientos cifrados.' : 'Crea un vault cifrado con el entreno inicial.'}
+            ? 'Elige tu espacio de entrenamiento o crea uno nuevo.'
+            : hasVault ? 'Desbloquea tus entrenamientos.' : 'Empieza a registrar tus entrenamientos.'}
         />
 
         {needsRemoteAccount ? (
@@ -31,48 +35,50 @@ export default function AuthScreen({
             {isRemoteStorage && (
               <div className="flex items-center justify-between gap-3 rounded-xl border border-slate-800 bg-slate-950/70 px-4 py-3">
                 <div className="min-w-0">
-                  <p className="text-[10px] font-bold uppercase tracking-wider text-slate-500">Cuenta Supabase</p>
+                  <p className="text-[10px] font-bold uppercase tracking-wider text-slate-500">Tu cuenta</p>
                   <p className="truncate text-sm font-bold text-slate-200">{remoteUserEmail}</p>
                 </div>
                 <button type="button" onClick={onAccountSignOut} className="p-2 text-slate-500 hover:text-red-300" title="Cerrar sesión"><LogOut size={18} /></button>
               </div>
             )}
 
-            <form className="space-y-4" onSubmit={onSubmit}>
+            <form className="space-y-4" onSubmit={(event) => { if (isRemoteStorage && isCreating) { event.preventDefault(); onCreateRemoteVault(); } else onSubmit(event); }}>
               {isRemoteStorage && (
                 <label className="block">
-                  <span className="text-xs font-bold text-slate-500 uppercase tracking-wider flex items-center gap-2 mb-2"><KeyRound size={14} /> Vault ID</span>
-                  <input type="text" value={vaultId} onChange={(event) => onVaultIdChange(event.target.value)} disabled={isCheckingRememberedDevice || isUnlocking} className="w-full bg-slate-950 border border-slate-700 rounded-xl px-4 py-4 text-white focus:ring-2 focus:ring-emerald-500 outline-none" placeholder="mi-vault" autoComplete="username" />
+                  <span className="text-xs font-bold text-slate-400 uppercase tracking-wider flex items-center gap-2 mb-2"><KeyRound size={14} />{isCreating ? 'Nombre del nuevo espacio' : 'Tu espacio de entrenamiento'}</span>
+                  {!isCreating && remoteVaults.length > 0 ? <select aria-label="Espacio de entrenamiento" value={vaultId} onChange={(event) => onVaultIdChange(event.target.value)} disabled={isCheckingRememberedDevice || isUnlocking} className="w-full bg-slate-950 border border-slate-700 rounded-xl px-4 py-4 text-white">{remoteVaults.map((space) => <option key={space.id} value={space.id}>{space.id}</option>)}</select> : <input type="text" value={vaultId} onChange={(event) => onVaultIdChange(event.target.value)} disabled={isCheckingRememberedDevice || isUnlocking} className="w-full bg-slate-950 border border-slate-700 rounded-xl px-4 py-4 text-white focus:ring-2 focus:ring-emerald-500 outline-none" placeholder="Mis entrenamientos" autoComplete="username" />}
                 </label>
               )}
 
               <label className="block">
-                <span className="text-xs font-bold text-slate-500 uppercase tracking-wider flex items-center gap-2 mb-2"><Lock size={14} /> Contraseña del vault</span>
-                <input type="password" value={password} onChange={(event) => onPasswordChange(event.target.value)} disabled={isCheckingRememberedDevice || isUnlocking} className="w-full bg-slate-950 border border-slate-700 rounded-xl px-4 py-4 text-white focus:ring-2 focus:ring-emerald-500 outline-none" autoFocus minLength={6} placeholder="Mínimo 6 caracteres" autoComplete="current-password" />
+                  <span className="text-xs font-bold text-slate-400 uppercase tracking-wider flex items-center gap-2 mb-2"><Lock size={14} />{isCreating ? 'Crea tu contraseña de protección' : 'Contraseña de protección'}</span>
+                <input type="password" value={password} onChange={(event) => onPasswordChange(event.target.value)} disabled={isCheckingRememberedDevice || isUnlocking} className="w-full bg-slate-950 border border-slate-700 rounded-xl px-4 py-4 text-white focus:ring-2 focus:ring-emerald-500 outline-none" autoFocus minLength={6} placeholder="Mínimo 6 caracteres" autoComplete={isCreating ? 'new-password' : 'current-password'} />
               </label>
 
-              <p className="text-xs text-slate-500">Esta contraseña cifra los datos en tu navegador y no se envía como credencial de la cuenta.</p>
+              <p className="text-xs text-slate-400">Protege tus entrenamientos con cifrado. {isRemoteStorage ? 'Es distinta de la contraseña de tu cuenta. ' : ''}Guárdala: no podemos recuperarla si la olvidas.</p>
+              {vaultListMessage && <p className="text-sm text-amber-300">{vaultListMessage}</p>}
+              {isCreating && <label className="flex items-start gap-3 text-sm text-slate-300"><input type="checkbox" checked={includeDemo} onChange={(event) => onIncludeDemoChange(event.target.checked)} className="mt-1 h-4 w-4 accent-emerald-500" /><span>Incluir datos de ejemplo<span className="block text-xs text-slate-400">Opcional, para explorar las gráficas. Empieza vacío si vas a registrar tus propios datos.</span></span></label>}
 
               <label className="flex items-start gap-3 rounded-xl border border-slate-800 bg-slate-950/70 p-3 text-sm text-slate-300">
                 <input type="checkbox" checked={rememberDevice} onChange={(event) => onRememberDeviceChange(event.target.checked)} disabled={isCheckingRememberedDevice || isUnlocking} className="mt-1 h-4 w-4 rounded border-slate-600 bg-slate-950 text-emerald-500 focus:ring-emerald-500" />
-                <span><span className="block font-bold text-slate-200">Recordar este dispositivo</span><span className="block text-xs text-slate-500">Guarda una clave no extraíble en este navegador.</span></span>
+                <span><span className="block font-bold text-slate-200">Recordar este dispositivo</span><span className="block text-xs text-slate-400">Podrás volver a entrar sin escribir esta contraseña. Úsalo en un dispositivo personal.</span></span>
               </label>
 
               {authError && <StatusMessage kind="error" message={authError} />}
 
               <button disabled={isCheckingRememberedDevice || isUnlocking || password.length < 6 || (isRemoteStorage && !vaultId.trim())} className="w-full bg-emerald-500 hover:bg-emerald-400 disabled:bg-slate-800 disabled:text-slate-600 disabled:cursor-not-allowed text-slate-950 font-black py-4 rounded-xl transition-all flex items-center justify-center gap-2">
                 {isRemoteStorage ? <Cloud size={20} /> : hasVault ? <ShieldCheck size={20} /> : <Database size={20} />}
-                {isCheckingRememberedDevice ? 'Comprobando dispositivo...' : isUnlocking ? 'Procesando...' : isRemoteStorage ? 'Abrir Vault' : hasVault ? 'Desbloquear' : 'Crear y Entrar'}
+                {isCheckingRememberedDevice ? 'Comprobando dispositivo...' : isUnlocking ? 'Procesando...' : isCreating ? 'Crear y empezar' : 'Entrar a mis entrenamientos'}
               </button>
 
               {isRemoteStorage && (
-                <button type="button" onClick={onCreateRemoteVault} disabled={isCheckingRememberedDevice || isUnlocking || password.length < 6 || !vaultId.trim()} className="w-full border border-slate-700 hover:border-emerald-500 disabled:border-slate-800 disabled:text-slate-700 text-slate-300 font-bold py-3 rounded-xl transition-colors flex items-center justify-center gap-2">
-                  <Database size={18} /> Crear vault nuevo
+                <button type="button" onClick={() => { setCreateSpace(!createSpace); onVaultIdChange(createSpace ? remoteVaults[0]?.id || 'entrenamientos' : ''); }} disabled={isCheckingRememberedDevice || isUnlocking} className="w-full border border-slate-700 hover:border-emerald-500 disabled:border-slate-800 disabled:text-slate-700 text-slate-300 font-bold py-3 rounded-xl transition-colors flex items-center justify-center gap-2">
+                  <Database size={18} />{createSpace ? 'Volver a mis espacios' : 'Crear otro espacio'}
                 </button>
               )}
             </form>
 
-            {hasVault && !isRemoteStorage && <button type="button" onClick={onResetVault} className="w-full text-xs font-bold text-slate-500 hover:text-red-300 transition-colors">Recrear vault con export inicial</button>}
+            {hasVault && !isRemoteStorage && <details><summary className="text-xs text-slate-400 cursor-pointer">Opciones avanzadas</summary><button type="button" onClick={onResetVault} className="w-full mt-3 text-xs font-bold text-red-300">Borrar datos locales y empezar de nuevo</button></details>}
           </>
         )}
       </div>
