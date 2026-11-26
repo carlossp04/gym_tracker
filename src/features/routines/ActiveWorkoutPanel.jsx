@@ -127,7 +127,7 @@ export default function ActiveWorkoutPanel({ workout, moreWeightReminders, restS
           <p className="text-sm text-slate-300"><strong className="text-emerald-300">{completedSets}/{allSets.length}</strong> series completadas</p>
           <div className="mt-1 h-1.5 max-w-64 overflow-hidden rounded-full bg-slate-950"><div className="h-full bg-emerald-500 transition-all" style={{ width: `${completion}%` }} /></div>
         </div>
-        <button type="button" onClick={() => setShowFinish(true)} disabled={saveStatus === 'saving' || completedSets === 0} className="col-start-2 row-start-1 min-h-11 px-3 py-2 rounded-xl text-sm font-black bg-emerald-500 hover:bg-emerald-400 disabled:bg-slate-800 disabled:text-slate-600 text-slate-950 flex items-center justify-center gap-2"><CircleStop size={17} /> Finalizar</button>
+        <button type="button" onClick={() => setShowFinish(true)} disabled={completedSets === 0} className="col-start-2 row-start-1 min-h-11 px-3 py-2 rounded-xl text-sm font-black bg-emerald-500 hover:bg-emerald-400 disabled:bg-slate-800 disabled:text-slate-600 text-slate-950 flex items-center justify-center gap-2"><CircleStop size={17} /> Finalizar</button>
         {restSeconds > 0 && rest && <RestTimer key={rest.endsAt ?? `paused-${rest.setId}`} rest={rest} onChange={changeRest} />}
         {saveStatus === 'error' && <button type="button" onClick={onSaveProgress} className="col-span-2 min-h-11 px-3 py-2 rounded-xl text-sm font-bold bg-slate-800 text-white flex items-center justify-center gap-2"><Save size={17} /> Reintentar guardado</button>}
       </div>
