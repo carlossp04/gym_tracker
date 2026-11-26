@@ -1,5 +1,6 @@
 import { Check, ChevronDown, CircleStop, Dumbbell, Pause, Pencil, Play, Plus, Save, Settings2, SkipForward, Timer, Trash2, X } from 'lucide-react';
 import { useEffect, useState } from 'react';
+import useDismissibleDetails from '../../lib/useDismissibleDetails';
 import ConfirmationDialog from '../../components/ConfirmationDialog';
 import { canCompleteSet, isValidSetReps, moreWeightReminderKey } from '../../lib/workoutFlow';
 
@@ -135,6 +136,7 @@ function formatRestTime(seconds) {
 }
 
 function RestSettings({ restSeconds, onRestSecondsChange, hasTimer, iconOnly }) {
+  const settingsRef = useDismissibleDetails();
   const [isCustomRest, setIsCustomRest] = useState(() => restSeconds > 0 && !restPresets.some(([seconds]) => seconds === restSeconds));
   const compact = hasTimer || iconOnly;
   const RestIcon = hasTimer ? Settings2 : Timer;
@@ -148,7 +150,7 @@ function RestSettings({ restSeconds, onRestSecondsChange, hasTimer, iconOnly }) 
   };
 
   return (
-    <details className={`${iconOnly ? '' : 'relative'} ${compact ? 'shrink-0' : 'min-w-0 flex-1'}`}>
+    <details ref={settingsRef} className={`${iconOnly ? '' : 'relative'} ${compact ? 'shrink-0' : 'min-w-0 flex-1'}`}>
       <summary aria-label={compact ? 'Configurar descanso' : undefined} title="Configurar descanso" className={`flex min-h-11 cursor-pointer list-none items-center gap-2 rounded-lg bg-slate-800 text-sm font-bold text-slate-200 hover:bg-slate-700 ${compact ? 'w-11 justify-center' : 'px-3'}`}>
         <RestIcon size={17} className={compact ? 'shrink-0' : 'shrink-0 text-emerald-300'} />
         {!compact && <>
