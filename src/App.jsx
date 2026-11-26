@@ -1183,13 +1183,12 @@ export default function GymTracker() {
   }
 
   return (
-    <div className="min-h-screen bg-slate-950 text-slate-100 font-sans selection:bg-emerald-500/30 pb-20">
+    <div className="flex min-h-screen flex-col bg-slate-950 pb-[calc(5rem+env(safe-area-inset-bottom))] font-sans text-slate-100 selection:bg-emerald-500/30 md:pb-4">
       <AppHeader onReset={lockApp} onNavigate={setActiveTab} onExport={exportVault} onImport={importVault} />
 
-      <main className="max-w-6xl mx-auto p-4 space-y-6 mt-4 relative">
+      <main className="relative mx-auto mt-4 w-full max-w-6xl flex-1 space-y-6 p-4">
         <TabNav activeTab={activeTab} onTabChange={(tab) => { setActiveTab(tab); if (tab === 'records') { setRecordsFocus(null); setRecordsOrigin(null); } }} />
 
-        {isUnlocked && <div className="flex items-center justify-between gap-3 text-xs text-slate-400" role="status" aria-live="polite"><span>{saveStatus === 'error' ? 'Pendiente de sincronizar · revisa el aviso' : draftSignature !== savedDraftRef.current ? 'Guardando cambios…' : 'Guardado en este dispositivo' + (isRemoteStorage ? ' y sincronizado' : '')}</span>{saveStatus === 'error' && <button type="button" onClick={() => setRetrySave((value) => value + 1)} className="text-emerald-300 font-bold">Reintentar</button>}</div>}
         {conflictRef.current && <div role="alert" className="rounded-xl border border-amber-500/40 bg-amber-500/10 p-4 space-y-3"><p className="text-sm text-amber-200">Hay dos versiones de tus datos. Conservamos tus cambios locales cifrados y hemos detenido la edición para evitar sobrescribir la versión guardada.</p><button type="button" onClick={async () => { await exportVault(); await discardPendingVault(vaultId); await lockApp(); }} className="rounded-xl bg-slate-800 px-4 py-3 text-sm font-bold">Descargar mis cambios y volver a abrir</button></div>}
 
         {activeTab === 'today' && (
@@ -1412,6 +1411,9 @@ export default function GymTracker() {
         )}
 
       </main>
+      <footer className="mx-auto w-full max-w-6xl px-4 pb-2">
+        {isUnlocked && <div className="flex items-center justify-between gap-3 text-xs text-slate-400" role="status" aria-live="polite"><span>{saveStatus === 'error' ? 'Pendiente de sincronizar · revisa el aviso' : draftSignature !== savedDraftRef.current ? 'Guardando cambios…' : 'Guardado en este dispositivo' + (isRemoteStorage ? ' y sincronizado' : '')}</span>{saveStatus === 'error' && <button type="button" onClick={() => setRetrySave((value) => value + 1)} className="text-emerald-300 font-bold">Reintentar</button>}</div>}
+      </footer>
     </div>
   );
 }
