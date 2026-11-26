@@ -21,8 +21,8 @@ export default function TodayTab({
 
   return (
     <div className="mx-auto max-w-xl space-y-4">
-      <header className="flex flex-wrap items-end justify-between gap-3">
-        <h2 className="text-3xl font-black text-white">Hoy</h2>
+      <header className="grid items-start gap-3 sm:grid-cols-[auto_minmax(0,22rem)] sm:justify-between">
+        <h2 className="text-3xl font-black text-white sm:leading-[2.75rem]">Hoy</h2>
         <TrainingProfilePicker user={user} users={users} onUserChange={onUserChange} onCreateProfile={onCreateProfile} />
       </header>
 
