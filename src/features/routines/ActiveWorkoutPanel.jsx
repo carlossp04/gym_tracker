@@ -1,4 +1,4 @@
-import { Check, CircleStop, Dumbbell, Plus, Save, Trash2, X } from 'lucide-react';
+import { Check, CircleStop, Dumbbell, Pencil, Plus, Save, Trash2, X } from 'lucide-react';
 import { useState } from 'react';
 
 export default function ActiveWorkoutPanel({ workout, saveStatus, saveMessage, onWorkoutChange, onSaveProgress, onFinish, onCancel }) {
@@ -78,13 +78,26 @@ export default function ActiveWorkoutPanel({ workout, saveStatus, saveMessage, o
 }
 
 function ExerciseCard({ exercise, index, onUpdateSet, onUpdateExercise, onRemove }) {
+  const [draftName, setDraftName] = useState(null);
   const completed = exercise.sets.filter((set) => set.completed).length;
-  const applyWeightToAll = (event) => {
-    const weight = event.currentTarget.elements.bulkWeight.value;
-    if (!weight || Number(weight) <= 0) return;
+  const saveName = (event) => {
+    event.preventDefault();
+    const name = draftName.trim();
+    if (!name) return;
+    if (name !== exercise.exercise) {
+      onUpdateExercise((current) => ({ ...current, exercise: name }));
+    }
+    setDraftName(null);
+  };
+
+  const applyToPending = (event, field) => {
+    event.preventDefault();
+    const input = event.currentTarget.elements.valueToApply;
+    if (!input.checkValidity()) return;
+    const value = input.value;
     onUpdateExercise((current) => ({
       ...current,
-      sets: current.sets.map((set) => set.completed ? set : { ...set, weight }),
+      sets: current.sets.map((set) => set.completed ? set : { ...set, [field]: value }),
     }));
   };
 
@@ -115,11 +128,32 @@ function ExerciseCard({ exercise, index, onUpdateSet, onUpdateExercise, onRemove
   return (
     <article className="bg-slate-950/70 border border-slate-800 rounded-2xl overflow-hidden">
       <div className="px-4 py-4 border-b border-slate-800 flex flex-col lg:flex-row lg:items-center gap-3">
-        <div className="min-w-0 flex-1"><p className="text-xs text-slate-400 font-black">EJERCICIO {index + 1}</p><h3 className="text-lg font-black text-white break-words">{exercise.exercise}</h3>{exercise.notes && <p className="text-xs text-amber-300 mt-1">{exercise.notes}</p>}{exercise.previousWeight != null && <p className="text-xs text-slate-400 mt-1">Último peso registrado: {exercise.previousWeight} kg</p>}<p className="text-xs text-emerald-400 mt-1">{completed}/{exercise.sets.length} series</p></div>
-        <form className="flex gap-2" onSubmit={(event) => { event.preventDefault(); applyWeightToAll(event); }}>
-          <input name="bulkWeight" type="number" min="0.1" step="0.1" defaultValue={exercise.sets.find((set) => set.weight)?.weight || ''} placeholder="Peso kg" className="w-28 min-w-0 min-h-11 bg-slate-900 border border-slate-700 rounded-lg px-3 text-sm text-white" />
-          <button className="min-h-11 px-3 py-2 bg-slate-800 hover:bg-slate-700 rounded-lg text-xs font-black text-slate-200">Aplicar a pendientes</button>
-        </form>
+        <div className="min-w-0 flex-1">
+          <p className="text-xs text-slate-400 font-black">EJERCICIO {index + 1}</p>
+          {draftName === null ? (
+            <div className="flex items-center gap-1">
+              <h3 className="min-w-0 break-words text-lg font-black text-white">{exercise.exercise}</h3>
+              <button type="button" aria-label={`Editar nombre de ${exercise.exercise}`} title="Editar nombre" onClick={() => setDraftName(exercise.exercise)} className="grid size-11 shrink-0 place-items-center rounded-lg text-slate-400 hover:bg-slate-800 hover:text-white">
+                <Pencil size={15} />
+              </button>
+            </div>
+          ) : (
+            <form className="grid grid-cols-[minmax(0,1fr)_2.75rem_2.75rem] items-center gap-1" onSubmit={saveName} onKeyDown={(event) => {
+              if (event.key === 'Escape') setDraftName(null);
+            }}>
+              <input autoFocus type="text" aria-label="Nombre del ejercicio" value={draftName} onChange={(event) => setDraftName(event.target.value)} className={setInputClasses} />
+              <button type="submit" disabled={!draftName.trim()} aria-label="Guardar nombre" title="Guardar nombre" className="grid size-11 place-items-center rounded-lg bg-slate-800 text-emerald-300 disabled:opacity-40"><Check size={18} /></button>
+              <button type="button" onClick={() => setDraftName(null)} aria-label="Cancelar edición del nombre" title="Cancelar" className="grid size-11 place-items-center rounded-lg text-slate-400 hover:bg-slate-800"><X size={18} /></button>
+            </form>
+          )}
+          {exercise.notes && <p className="text-xs text-amber-300 mt-1">{exercise.notes}</p>}
+          {exercise.previousWeight != null && <p className="text-xs text-slate-400 mt-1">Último peso registrado: {exercise.previousWeight} kg</p>}
+          <p className="text-xs text-emerald-400 mt-1">{completed}/{exercise.sets.length} series</p>
+        </div>
+        <div className="grid gap-2">
+          <PendingSetsField label="Reps" buttonLabel="Aplicar repeticiones a pendientes" min="1" step="1" inputMode="numeric" defaultValue={exercise.sets.find((set) => Number.isInteger(Number(set.actualReps)) && Number(set.actualReps) > 0)?.actualReps ?? ''} onSubmit={(event) => applyToPending(event, 'actualReps')} />
+          <PendingSetsField label="Peso kg" buttonLabel="Aplicar peso a pendientes" min="0.1" step="0.1" inputMode="decimal" defaultValue={exercise.sets.find((set) => set.weight)?.weight || ''} onSubmit={(event) => applyToPending(event, 'weight')} />
+        </div>
         <button type="button" onClick={onRemove} className="p-2 text-slate-600 hover:text-red-300 self-end lg:self-auto" title="Omitir ejercicio"><Trash2 size={17} /></button>
       </div>
 
@@ -142,6 +176,18 @@ function ExerciseCard({ exercise, index, onUpdateSet, onUpdateExercise, onRemove
       </div>
       <button type="button" onClick={addSet} className="w-full border-t border-slate-800 py-3 text-sm font-bold text-slate-500 hover:text-emerald-400 hover:bg-slate-900 flex items-center justify-center gap-2"><Plus size={15} /> Añadir serie</button>
     </article>
+  );
+}
+
+function PendingSetsField({ label, buttonLabel, min, step, inputMode, defaultValue, onSubmit }) {
+  return (
+    <form className="grid grid-cols-[minmax(0,7rem)_minmax(0,1fr)] items-end gap-2" onSubmit={onSubmit}>
+      <label className="grid gap-1 text-xs font-bold text-slate-300">
+        {label}
+        <input name="valueToApply" type="number" required min={min} step={step} inputMode={inputMode} defaultValue={defaultValue} className="w-full min-w-0 min-h-11 bg-slate-900 border border-slate-700 rounded-lg px-3 text-sm font-normal text-white" />
+      </label>
+      <button type="submit" aria-label={buttonLabel} className="min-h-11 px-3 py-2 bg-slate-800 hover:bg-slate-700 rounded-lg text-xs font-black text-slate-200">Aplicar a pendientes</button>
+    </form>
   );
 }
 
