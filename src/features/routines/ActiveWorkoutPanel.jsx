@@ -10,6 +10,7 @@ export default function ActiveWorkoutPanel({ workout, moreWeightReminders, restS
   const completedSets = allSets.filter((set) => set.completed).length;
   const completion = allSets.length > 0 ? Math.round((completedSets / allSets.length) * 100) : 0;
   const rest = workout.restTimer;
+  const showRestRow = restSeconds > 0 || Boolean(rest);
   const changeRest = (restTimer) => onWorkoutChange({ ...workout, restTimer });
 
   const updateSet = (exerciseId, setId, patch, completedAt) => {
@@ -111,17 +112,17 @@ export default function ActiveWorkoutPanel({ workout, moreWeightReminders, restS
 
       {saveMessage && <p className={`text-sm rounded-xl border p-3 ${saveStatus === 'error' ? 'text-red-300 bg-red-500/10 border-red-500/30' : 'text-emerald-300 bg-emerald-500/10 border-emerald-500/30'}`}>{saveMessage}</p>}
 
-      <div className="sticky bottom-[calc(5rem+env(safe-area-inset-bottom))] md:bottom-4 z-20 grid grid-cols-[minmax(0,1fr)_auto] items-center gap-2 rounded-2xl border border-slate-700 bg-slate-900/95 px-3 py-2 shadow-2xl backdrop-blur">
+      <div className="sticky bottom-[calc(5rem+env(safe-area-inset-bottom))] md:bottom-4 z-20 grid grid-cols-[minmax(0,1fr)_auto_auto] items-center gap-2 rounded-2xl border border-slate-700 bg-slate-900/95 px-3 py-2 shadow-2xl backdrop-blur">
         <div className="min-w-0">
           <p className="text-sm text-slate-300"><strong className="text-emerald-300">{completedSets}/{allSets.length}</strong> series completadas</p>
           <div className="mt-1 h-1.5 max-w-64 overflow-hidden rounded-full bg-slate-950"><div className="h-full bg-emerald-500 transition-all" style={{ width: `${completion}%` }} /></div>
         </div>
-        <button type="button" onClick={() => setShowFinish(true)} disabled={completedSets === 0} className="col-start-2 row-start-1 min-h-11 px-3 py-2 rounded-xl text-sm font-black bg-emerald-500 hover:bg-emerald-400 disabled:bg-slate-800 disabled:text-slate-600 text-slate-950 flex items-center justify-center gap-2"><CircleStop size={17} /> Finalizar</button>
-        <div className="col-span-2 flex min-w-0 items-center gap-2 border-t border-slate-800 pt-2">
+        <div className={showRestRow ? 'col-span-3 row-start-2 flex min-w-0 items-center gap-2 border-t border-slate-800 pt-2' : 'col-start-2 row-start-1'}>
           {rest && <RestTimer key={rest.endsAt ?? `paused-${rest.setId}`} rest={rest} onChange={changeRest} />}
-          <RestSettings restSeconds={restSeconds} onRestSecondsChange={onRestSecondsChange} hasTimer={Boolean(rest)} />
+          <RestSettings restSeconds={restSeconds} onRestSecondsChange={onRestSecondsChange} hasTimer={Boolean(rest)} iconOnly={!showRestRow} />
         </div>
-        {saveStatus === 'error' && <button type="button" onClick={onSaveProgress} className="col-span-2 min-h-11 px-3 py-2 rounded-xl text-sm font-bold bg-slate-800 text-white flex items-center justify-center gap-2"><Save size={17} /> Reintentar guardado</button>}
+        <button type="button" onClick={() => setShowFinish(true)} disabled={completedSets === 0} className="col-start-3 row-start-1 min-h-11 px-3 py-2 rounded-xl text-sm font-black bg-emerald-500 hover:bg-emerald-400 disabled:bg-slate-800 disabled:text-slate-600 text-slate-950 flex items-center justify-center gap-2"><CircleStop size={17} /> Finalizar</button>
+        {saveStatus === 'error' && <button type="button" onClick={onSaveProgress} className="col-span-3 min-h-11 px-3 py-2 rounded-xl text-sm font-bold bg-slate-800 text-white flex items-center justify-center gap-2"><Save size={17} /> Reintentar guardado</button>}
       </div>
       {showFinish && <div className="fixed inset-0 z-50 bg-black/80 flex items-center justify-center p-4" role="dialog" aria-modal="true" aria-labelledby="finish-title"><section className="bg-slate-900 border border-slate-700 rounded-3xl p-6 w-full max-w-md space-y-4"><h2 id="finish-title" className="text-xl font-black">Resumen de la sesión</h2><p className="text-slate-300">Se guardarán {completedSets} series completadas de {allSets.length}.</p>{allSets.length > completedSets && <p className="text-amber-300 text-sm">Quedan {allSets.length - completedSets} series pendientes. Puedes volver para completarlas o finalizar solo con las marcadas.</p>}<ul className="space-y-2 text-sm max-h-56 overflow-auto">{workout.exercises.map((exercise) => <li key={exercise.id} className="flex justify-between gap-3"><span>{exercise.exercise}</span><span className="whitespace-nowrap">{exercise.sets.filter((set) => set.completed).length}/{exercise.sets.length}</span></li>)}</ul><div className="flex gap-3"><button autoFocus type="button" disabled={saveStatus === 'saving'} onClick={() => setShowFinish(false)} className="flex-1 bg-slate-800 rounded-xl py-3 font-bold">Seguir entrenando</button><button type="button" disabled={saveStatus === 'saving'} onClick={async () => { if (await onFinish()) setShowFinish(false); }} className="flex-1 bg-emerald-500 text-slate-950 rounded-xl py-3 font-bold">Guardar y finalizar</button></div>{saveStatus === 'error' && <p role="alert" className="text-sm text-red-300">{saveMessage}</p>}</section></div>}
     </div>
@@ -135,8 +136,10 @@ function formatRestTime(seconds) {
   return `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, '0')}`;
 }
 
-function RestSettings({ restSeconds, onRestSecondsChange, hasTimer }) {
+function RestSettings({ restSeconds, onRestSecondsChange, hasTimer, iconOnly }) {
   const [isCustomRest, setIsCustomRest] = useState(() => !restPresets.some(([seconds]) => seconds === restSeconds));
+  const compact = hasTimer || iconOnly;
+  const RestIcon = hasTimer ? Settings2 : Timer;
 
   const saveCustomRest = (event) => {
     event.preventDefault();
@@ -147,11 +150,11 @@ function RestSettings({ restSeconds, onRestSecondsChange, hasTimer }) {
   };
 
   return (
-    <details className={`relative ${hasTimer ? 'shrink-0' : 'min-w-0 flex-1'}`}>
-      <summary aria-label={hasTimer ? 'Configurar temporizador de descanso' : undefined} title="Temporizador de descanso" className={`flex min-h-11 cursor-pointer list-none items-center gap-2 rounded-lg bg-slate-800 text-sm font-bold text-slate-200 hover:bg-slate-700 ${hasTimer ? 'w-11 justify-center' : 'px-3'}`}>
-        {hasTimer ? <Settings2 size={17} /> : <>
-          <Timer size={17} className="shrink-0 text-emerald-300" />
-          {restSeconds > 0 ? `Descanso · ${formatRestTime(restSeconds)}` : 'Descanso desactivado'}
+    <details className={`${iconOnly ? '' : 'relative'} ${compact ? 'shrink-0' : 'min-w-0 flex-1'}`}>
+      <summary aria-label={compact ? 'Configurar descanso' : undefined} title="Configurar descanso" className={`flex min-h-11 cursor-pointer list-none items-center gap-2 rounded-lg bg-slate-800 text-sm font-bold text-slate-200 hover:bg-slate-700 ${compact ? 'w-11 justify-center' : 'px-3'}`}>
+        <RestIcon size={17} className={compact ? 'shrink-0' : 'shrink-0 text-emerald-300'} />
+        {!compact && <>
+          Descanso · {formatRestTime(restSeconds)}
           <ChevronDown size={16} className="ml-auto shrink-0" />
         </>}
       </summary>
