@@ -1231,6 +1231,8 @@ export default function GymTracker() {
             <ActiveWorkoutPanel
               workout={activeWorkout}
               moreWeightReminders={moreWeightReminders}
+              restSeconds={uiDrafts.restSeconds ?? 0}
+              onRestSecondsChange={(seconds) => changeDraft('restSeconds', seconds)}
               saveStatus={saveStatus}
               saveMessage={saveMessage}
               onWorkoutChange={changeWorkout}

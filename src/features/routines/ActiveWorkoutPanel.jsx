@@ -1,22 +1,44 @@
-import { Check, ChevronDown, CircleStop, Dumbbell, Ellipsis, Pencil, Plus, Save, Trash2, X } from 'lucide-react';
-import { useState } from 'react';
+import { Check, ChevronDown, CircleStop, Dumbbell, Ellipsis, Pause, Pencil, Play, Plus, Save, SkipForward, Timer, Trash2, X } from 'lucide-react';
+import { useEffect, useState } from 'react';
 import { canCompleteSet, isValidSetReps, moreWeightReminderKey } from '../../lib/workoutFlow';
 
-export default function ActiveWorkoutPanel({ workout, moreWeightReminders, saveStatus, saveMessage, onWorkoutChange, onSaveProgress, onFinish, onCancel }) {
+export default function ActiveWorkoutPanel({ workout, moreWeightReminders, restSeconds, onRestSecondsChange, saveStatus, saveMessage, onWorkoutChange, onSaveProgress, onFinish, onCancel }) {
   const [showFinish, setShowFinish] = useState(false);
+  const [isCustomRest, setIsCustomRest] = useState(() => !restPresets.some(([seconds]) => seconds === restSeconds));
   const allSets = workout.exercises.flatMap((exercise) => exercise.sets);
   const completedSets = allSets.filter((set) => set.completed).length;
   const completion = allSets.length > 0 ? Math.round((completedSets / allSets.length) * 100) : 0;
+  const rest = workout.restTimer;
+  const changeRest = (restTimer) => onWorkoutChange({ ...workout, restTimer });
+  const setRestDuration = (seconds) => {
+    onRestSecondsChange(seconds);
+    if (seconds === 0 && rest) changeRest(null);
+  };
 
-  const updateSet = (exerciseId, setId, patch) => {
+  const saveCustomRest = (event) => {
+    event.preventDefault();
+    const { minutes, seconds } = event.currentTarget.elements;
+    if (!minutes.checkValidity() || !seconds.checkValidity()) return;
+    setRestDuration(minutes.valueAsNumber * 60 + seconds.valueAsNumber);
+    event.currentTarget.closest('details').open = false;
+  };
+
+  const updateSet = (exerciseId, setId, patch, completedAt) => {
+    const current = allSets.find((set) => set.id === setId);
+    const next = { ...current, ...patch };
+    next.completed = next.completed && canCompleteSet(next);
+    let restTimer = rest;
+    if (completedAt && restSeconds > 0 && !current.completed && next.completed) {
+      restTimer = { setId, endsAt: completedAt + restSeconds * 1000 };
+    } else if (rest?.setId === setId && !next.completed) {
+      restTimer = null;
+    }
+
     onWorkoutChange({
       ...workout,
+      restTimer,
       exercises: workout.exercises.map((exercise) => exercise.id === exerciseId
-        ? { ...exercise, sets: exercise.sets.map((set) => {
-          if (set.id !== setId) return set;
-          const next = { ...set, ...patch };
-          return { ...next, completed: next.completed && canCompleteSet(next) };
-        }) }
+        ? { ...exercise, sets: exercise.sets.map((set) => set.id === setId ? next : set) }
         : exercise),
     });
   };
@@ -35,7 +57,7 @@ export default function ActiveWorkoutPanel({ workout, moreWeightReminders, saveS
 
   return (
     <div className="space-y-5 animate-in fade-in slide-in-from-bottom-4 duration-500">
-      <section className="bg-slate-900 border border-slate-800 rounded-3xl overflow-hidden shadow-xl">
+      <section className="bg-slate-900 border border-slate-800 rounded-3xl shadow-xl">
         <div className="p-5 border-b border-slate-800 space-y-4">
           <div className="flex items-start justify-between gap-3">
             <div className="min-w-0 break-words">
@@ -47,7 +69,31 @@ export default function ActiveWorkoutPanel({ workout, moreWeightReminders, saveS
               <summary aria-label="Opciones de la sesión" className="grid size-11 cursor-pointer list-none place-items-center rounded-xl text-slate-300 hover:bg-slate-800">
                 <Ellipsis size={20} />
               </summary>
-              <div className="absolute right-0 top-full z-10 mt-1 w-max rounded-xl border border-slate-700 bg-slate-950 p-1 shadow-lg">
+              <div className="absolute right-0 top-full z-10 mt-1 w-56 rounded-xl border border-slate-700 bg-slate-950 p-1 shadow-lg">
+                <label className="grid gap-1 px-3 py-2 text-sm font-bold text-slate-300">
+                  Descanso automático
+                  <select value={isCustomRest ? 'custom' : restSeconds} onChange={(event) => {
+                    const value = event.target.value;
+                    setIsCustomRest(value === 'custom');
+                    if (value !== 'custom') setRestDuration(Number(value));
+                  }} className="min-h-11 rounded-lg border border-slate-700 bg-slate-900 px-2 text-slate-100">
+                    {restPresets.map(([seconds, label]) => <option key={seconds} value={seconds}>{label}</option>)}
+                    <option value="custom">Personalizado</option>
+                  </select>
+                </label>
+                {isCustomRest && (
+                  <form onSubmit={saveCustomRest} className="grid grid-cols-2 gap-2 px-3 pb-2 text-sm text-slate-300">
+                    <label className="grid gap-1">
+                      Minutos
+                      <input type="number" name="minutes" inputMode="numeric" min="0" max="59" step="1" required defaultValue={Math.floor(restSeconds / 60)} className={restInputClasses} />
+                    </label>
+                    <label className="grid gap-1">
+                      Segundos
+                      <input type="number" name="seconds" inputMode="numeric" min="0" max="59" step="1" required defaultValue={restSeconds % 60} className={restInputClasses} />
+                    </label>
+                    <button type="submit" className="col-span-2 min-h-11 rounded-lg bg-slate-800 px-3 font-bold text-emerald-300">Guardar duración</button>
+                  </form>
+                )}
                 <button type="button" onClick={onCancel} disabled={saveStatus === 'saving'} className="flex min-h-11 items-center gap-2 rounded-lg px-3 text-sm font-bold text-red-300 hover:bg-red-500/10 disabled:opacity-50"><X size={17} /> Descartar sesión</button>
               </div>
             </details>
@@ -64,7 +110,7 @@ export default function ActiveWorkoutPanel({ workout, moreWeightReminders, saveS
                 index={index}
                 reminderKey={reminderKey}
                 reminderWeight={moreWeightReminders[reminderKey]}
-                onUpdateSet={(setId, patch) => updateSet(exercise.id, setId, patch)}
+                onUpdateSet={(setId, patch, completedAt) => updateSet(exercise.id, setId, patch, completedAt)}
                 onUpdateExercise={(updater) => updateExercise(exercise.id, updater)}
                 onRemove={() => removeExercise(exercise.id)}
               />
@@ -82,9 +128,54 @@ export default function ActiveWorkoutPanel({ workout, moreWeightReminders, saveS
           <div className="mt-1 h-1.5 max-w-64 overflow-hidden rounded-full bg-slate-950"><div className="h-full bg-emerald-500 transition-all" style={{ width: `${completion}%` }} /></div>
         </div>
         <button type="button" onClick={() => setShowFinish(true)} disabled={saveStatus === 'saving' || completedSets === 0} className="col-start-2 row-start-1 min-h-11 px-3 py-2 rounded-xl text-sm font-black bg-emerald-500 hover:bg-emerald-400 disabled:bg-slate-800 disabled:text-slate-600 text-slate-950 flex items-center justify-center gap-2"><CircleStop size={17} /> Finalizar</button>
-        {saveStatus === 'error' && <button type="button" onClick={onSaveProgress} className="col-span-2 row-start-2 min-h-11 px-3 py-2 rounded-xl text-sm font-bold bg-slate-800 text-white flex items-center justify-center gap-2"><Save size={17} /> Reintentar guardado</button>}
+        {restSeconds > 0 && rest && <RestTimer key={rest.endsAt ?? `paused-${rest.setId}`} rest={rest} onChange={changeRest} />}
+        {saveStatus === 'error' && <button type="button" onClick={onSaveProgress} className="col-span-2 min-h-11 px-3 py-2 rounded-xl text-sm font-bold bg-slate-800 text-white flex items-center justify-center gap-2"><Save size={17} /> Reintentar guardado</button>}
       </div>
       {showFinish && <div className="fixed inset-0 z-50 bg-black/80 flex items-center justify-center p-4" role="dialog" aria-modal="true" aria-labelledby="finish-title"><section className="bg-slate-900 border border-slate-700 rounded-3xl p-6 w-full max-w-md space-y-4"><h2 id="finish-title" className="text-xl font-black">Resumen de la sesión</h2><p className="text-slate-300">Se guardarán {completedSets} series completadas de {allSets.length}.</p>{allSets.length > completedSets && <p className="text-amber-300 text-sm">Quedan {allSets.length - completedSets} series pendientes. Puedes volver para completarlas o finalizar solo con las marcadas.</p>}<ul className="space-y-2 text-sm max-h-56 overflow-auto">{workout.exercises.map((exercise) => <li key={exercise.id} className="flex justify-between gap-3"><span>{exercise.exercise}</span><span className="whitespace-nowrap">{exercise.sets.filter((set) => set.completed).length}/{exercise.sets.length}</span></li>)}</ul><div className="flex gap-3"><button autoFocus type="button" disabled={saveStatus === 'saving'} onClick={() => setShowFinish(false)} className="flex-1 bg-slate-800 rounded-xl py-3 font-bold">Seguir entrenando</button><button type="button" disabled={saveStatus === 'saving'} onClick={async () => { if (await onFinish()) setShowFinish(false); }} className="flex-1 bg-emerald-500 text-slate-950 rounded-xl py-3 font-bold">Guardar y finalizar</button></div>{saveStatus === 'error' && <p role="alert" className="text-sm text-red-300">{saveMessage}</p>}</section></div>}
+    </div>
+  );
+}
+
+const restPresets = [[0, 'Desactivado'], [30, '30 s'], [60, '1 min'], [90, '1 min 30 s'], [120, '2 min'], [180, '3 min']];
+const restInputClasses = 'min-h-11 w-full min-w-0 rounded-lg border border-slate-700 bg-slate-900 px-2 text-slate-100';
+
+function RestTimer({ rest, onChange }) {
+  const { endsAt, remainingMs, setId } = rest;
+  const [now, setNow] = useState(Date.now);
+  const seconds = Math.ceil(Math.max(0, endsAt ? endsAt - now : remainingMs) / 1000);
+  const finished = seconds === 0;
+  const paused = !endsAt;
+
+  useEffect(() => {
+    if (paused || finished) return;
+    const interval = window.setInterval(() => setNow(Date.now()), 250);
+    return () => window.clearInterval(interval);
+  }, [paused, finished]);
+
+  function togglePause() {
+    if (paused) {
+      onChange({ setId, endsAt: Date.now() + remainingMs });
+    } else {
+      onChange({ setId, remainingMs: Math.max(0, endsAt - Date.now()) });
+    }
+  }
+
+  return (
+    <div className="col-span-2 flex min-w-0 items-center gap-2 border-t border-slate-800 pt-2">
+      <Timer size={17} className="shrink-0 text-emerald-300" />
+      <div className="min-w-0 flex-1 text-sm text-slate-300">
+        {finished ? <span role="status">Descanso terminado</span> : (
+          <span>Descanso <strong role="timer" className="ml-1 tabular-nums text-emerald-300">{Math.floor(seconds / 60)}:{String(seconds % 60).padStart(2, '0')}</strong>{paused && <span className="ml-1 text-xs">En pausa</span>}</span>
+        )}
+      </div>
+      {!finished && (
+        <button type="button" onClick={togglePause} aria-label={paused ? 'Reanudar descanso' : 'Pausar descanso'} title={paused ? 'Reanudar descanso' : 'Pausar descanso'} className="grid size-11 shrink-0 place-items-center rounded-lg bg-slate-800 text-slate-200">
+          {paused ? <Play size={16} /> : <Pause size={16} />}
+        </button>
+      )}
+      <button type="button" onClick={() => onChange(null)} aria-label={finished ? 'Cerrar aviso de descanso' : 'Saltar descanso'} title={finished ? 'Cerrar aviso de descanso' : 'Saltar descanso'} className="grid size-11 shrink-0 place-items-center rounded-lg bg-slate-800 text-slate-200">
+        {finished ? <X size={17} /> : <SkipForward size={17} />}
+      </button>
     </div>
   );
 }
@@ -193,7 +284,7 @@ function ExerciseCard({ exercise, index, reminderKey, reminderWeight, onUpdateSe
                 <span className="text-center font-black text-white">{set.number}</span>
                 <input aria-invalid={invalidReps} aria-describedby={`set-target-${set.id}`} aria-label={`Repeticiones serie ${set.number} de ${exercise.exercise}`} inputMode="numeric" type="number" min="1" step="1" value={set.actualReps} onChange={(event) => onUpdateSet(set.id, { actualReps: event.target.value })} className={`${setInputClasses} ${neutralInputColors}`} />
                 <input aria-label={`Peso serie ${set.number} de ${exercise.exercise}`} inputMode="decimal" type="number" min="0.1" step="0.1" value={set.weight} onChange={(event) => onUpdateSet(set.id, { weight: event.target.value })} className={`${setInputClasses} ${weightInputColors}`} />
-                <div className="flex justify-center"><button type="button" onClick={() => onUpdateSet(set.id, { completed: !set.completed })} disabled={!canComplete && !set.completed} aria-pressed={set.completed} className={`w-11 h-11 rounded-xl border flex items-center justify-center transition-all ${set.completed ? 'bg-emerald-500 border-emerald-400 text-slate-950' : canComplete ? 'bg-slate-900 border-slate-700 text-slate-500 hover:border-emerald-500' : 'bg-slate-900 border-slate-800 text-slate-700 opacity-40'}`} aria-label={`Marcar serie ${set.number} de ${exercise.exercise}`}><Check size={20} strokeWidth={3} /></button></div>
+                <div className="flex justify-center"><button type="button" onClick={() => onUpdateSet(set.id, { completed: !set.completed }, Date.now())} disabled={!canComplete && !set.completed} aria-pressed={set.completed} className={`w-11 h-11 rounded-xl border flex items-center justify-center transition-all ${set.completed ? 'bg-emerald-500 border-emerald-400 text-slate-950' : canComplete ? 'bg-slate-900 border-slate-700 text-slate-500 hover:border-emerald-500' : 'bg-slate-900 border-slate-800 text-slate-700 opacity-40'}`} aria-label={`Marcar serie ${set.number} de ${exercise.exercise}`}><Check size={20} strokeWidth={3} /></button></div>
                 <button type="button" onClick={() => removeSet(set.id)} disabled={exercise.sets.length <= 1} aria-label={`Eliminar serie ${set.number} de ${exercise.exercise}`} className="grid size-11 place-items-center rounded-lg text-slate-400 hover:bg-red-500/10 hover:text-red-300 disabled:invisible"><Trash2 size={16} /></button>
                 <span id={`set-target-${set.id}`} className={`col-start-2 row-start-2 text-[10px] ${invalidReps ? 'text-red-300' : 'text-slate-400'}`}>{invalidReps ? 'Reps sin decimales, mínimo 1' : `Objetivo: ${set.targetReps}`}</span>
               </div>
