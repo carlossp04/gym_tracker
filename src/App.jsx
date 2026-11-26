@@ -1150,10 +1150,29 @@ export default function GymTracker() {
         {isUnlocked && <div className="flex items-center justify-between gap-3 text-xs text-slate-400" role="status" aria-live="polite"><span>{saveStatus === 'error' ? 'Pendiente de sincronizar · revisa el aviso' : draftSignature !== savedDraftRef.current ? 'Guardando cambios…' : 'Guardado en este dispositivo' + (isRemoteStorage ? ' y sincronizado' : '')}</span>{saveStatus === 'error' && <button type="button" onClick={() => setRetrySave((value) => value + 1)} className="text-emerald-300 font-bold">Reintentar</button>}</div>}
         {conflictRef.current && <div role="alert" className="rounded-xl border border-amber-500/40 bg-amber-500/10 p-4 space-y-3"><p className="text-sm text-amber-200">Hay dos versiones de tus datos. Conservamos tus cambios locales cifrados y hemos detenido la edición para evitar sobrescribir la versión guardada.</p><button type="button" onClick={async () => { await exportVault(); await discardPendingVault(vaultId); await lockApp(); }} className="rounded-xl bg-slate-800 px-4 py-3 text-sm font-bold">Descargar mis cambios y volver a abrir</button></div>}
 
-        {activeTab === 'today' && <TodayTab user={uiDrafts.profile ?? (selectedUser === ALL_USERS_OPTION ? '' : selectedUser)} users={availableUsers} onUserChange={(user) => { changeDraft('profile', user); setSelectedUser(user); }} activeWorkout={activeWorkout} routines={routines} entries={trainingEntries} onStart={() => {
-          if (!activeWorkout) changeDraft('inputMode', routines.some((routine) => routine.sessions.some((session) => session.exercises.length > 0)) ? 'template' : 'manual');
-          setCompletedWorkout(null); setActiveTab('training');
-        }} onRoutineStart={(routineId, sessionId) => startTemplateWorkout({ routineId, sessionId, user: uiDrafts.profile ?? selectedUser, date: todayInputValue() })} onCreateRoutine={() => setActiveTab('routines')} onRepeat={repeatWorkout} onOpenWorkout={openRecordsWorkout} />}
+        {activeTab === 'today' && (
+          <TodayTab
+            user={uiDrafts.profile ?? (selectedUser === ALL_USERS_OPTION ? '' : selectedUser)}
+            users={availableUsers}
+            onUserChange={(user) => { changeDraft('profile', user); setSelectedUser(user); }}
+            activeWorkout={activeWorkout}
+            routines={routines}
+            entries={trainingEntries}
+            isSaving={saveStatus === 'saving'}
+            routineId={uiDrafts.todayRoutineId ?? uiDrafts.routineSelection}
+            onRoutineChange={(routineId) => changeDraft('todayRoutineId', routineId)}
+            onContinue={() => setActiveTab('training')}
+            onFreeSession={() => {
+              changeDraft('inputMode', 'manual');
+              setCompletedWorkout(null);
+              setActiveTab('training');
+            }}
+            onRoutineStart={(routineId, sessionId, user) => startTemplateWorkout({ routineId, sessionId, user, date: todayInputValue() })}
+            onCreateRoutine={() => setActiveTab('routines')}
+            onRepeat={repeatWorkout}
+            onOpenWorkout={openRecordsWorkout}
+          />
+        )}
 
         {['records', 'calendar', 'progress', 'general'].includes(activeTab) && <div className="flex flex-wrap gap-2">{(activeTab === 'records' || activeTab === 'calendar' ? [['records', 'Sesiones'], ['calendar', 'Calendario']] : [['progress', 'Por ejercicio'], ['general', 'Resumen y comparativas']]).map(([tab, label]) => <button key={tab} type="button" onClick={() => setActiveTab(tab)} className={`rounded-xl px-4 py-3 text-sm font-bold ${activeTab === tab ? 'bg-slate-700 text-white' : 'text-slate-400 bg-slate-900'}`}>{label}</button>)}</div>}
 
