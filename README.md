@@ -63,4 +63,6 @@ Antes de actualizar o borrar, un trigger copia automáticamente la versión cifr
 npm run lint
 npm test
 npm run build
+npx playwright install chromium
+npm run test:browser
 ```

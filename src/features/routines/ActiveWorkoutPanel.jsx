@@ -1,3 +1,4 @@
+import { inputToDisplayDate } from '../../lib/trainingDates.js';
 import { Check, ChevronDown, CircleStop, Dumbbell, Pause, Pencil, Play, Plus, Save, Settings2, SkipForward, Timer, Trash2, X } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import useDismissibleDetails from '../../lib/useDismissibleDetails';
@@ -65,7 +66,7 @@ export default function ActiveWorkoutPanel({ workout, moreWeightReminders, restS
             <div className="min-w-0 break-words">
               <p className="text-xs font-black uppercase tracking-wider text-fuchsia-400">{workout.routineName}</p>
               <h2 className="text-2xl font-black text-white mt-1">{workout.sessionName}</h2>
-              <p className="text-sm text-slate-400 mt-1">{workout.user} · {formatDate(workout.date)}</p>
+              <p className="text-sm text-slate-400 mt-1">{workout.user} · {inputToDisplayDate(workout.date)}</p>
             </div>
           </div>
         </div>
@@ -377,11 +378,6 @@ function PendingSetsField({ label, inputColors = neutralInputColors, buttonLabel
       <button type="submit" aria-label={buttonLabel} className="min-h-11 px-3 py-2 bg-slate-800 hover:bg-slate-700 rounded-lg text-xs font-black text-slate-200">Aplicar a pendientes</button>
     </form>
   );
-}
-
-function formatDate(value) {
-  const [year, month, day] = value.split('-');
-  return `${day}/${month}/${year}`;
 }
 
 const setInputClasses = 'w-full min-w-0 h-11 border rounded-lg px-2 text-white focus:outline-none focus:border-emerald-500';

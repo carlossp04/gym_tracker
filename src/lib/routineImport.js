@@ -99,6 +99,7 @@ export function parseRoutineImportJson(input) {
   return { name: routineName, sessions };
 }
 
+/** @returns {import('./vaultTypes.js').Routine} */
 export function materializeImportedRoutine(validatedRoutine) {
   return {
     id: crypto.randomUUID(),

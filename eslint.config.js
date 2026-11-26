@@ -6,7 +6,12 @@ import { defineConfig, globalIgnores } from 'eslint/config'
 
 export default defineConfig([
   globalIgnores(['dist']),
-  { files: ['tests/**/*.mjs'], languageOptions: { globals: globals.node } },
+  {
+    files: ['tests/**/*.mjs', 'playwright.config.mjs'],
+    extends: [js.configs.recommended],
+    languageOptions: { globals: globals.node },
+  },
+  { files: ['tests/browser/**/*.mjs'], languageOptions: { globals: globals.browser } },
   {
     files: ['**/*.{js,jsx}'],
     extends: [

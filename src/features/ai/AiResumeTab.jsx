@@ -1,3 +1,4 @@
+import { parseTrainingDate, parseDateInput, formatDateInput, formatDisplayDate } from '../../lib/trainingDates.js';
 import { useMemo, useState } from 'react';
 import { Bot, CalendarDays, Check, ClipboardCopy, FileText, Users } from 'lucide-react';
 
@@ -411,8 +412,8 @@ function getLatestUserDayEntries(entries, user) {
   const latestDate = getLatestEntryDate(userEntries);
   if (!latestDate) return [];
 
-  const latestKey = toDateKey(latestDate);
-  return userEntries.filter((entry) => toDateKey(parseTrainingDate(entry.date)) === latestKey);
+  const latestKey = formatDateInput(latestDate);
+  return userEntries.filter((entry) => formatDateInput(parseTrainingDate(entry.date)) === latestKey);
 }
 
 function groupWorkouts(entries) {
@@ -501,29 +502,6 @@ function getLatestEntryDate(entries) {
   return entries
     .map((entry) => parseTrainingDate(entry.date))
     .sort((a, b) => b - a)[0];
-}
-
-function parseTrainingDate(date) {
-  const [day, month, year] = date.split(/[/.-]/).map(Number);
-  const fullYear = year < 100 ? 2000 + year : year;
-  return new Date(fullYear, month - 1, day);
-}
-
-function parseDateInput(date) {
-  const [year, month, day] = date.split('-').map(Number);
-  return new Date(year, month - 1, day);
-}
-
-function formatDateInput(date) {
-  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
-}
-
-function formatDisplayDate(date) {
-  return `${String(date.getDate()).padStart(2, '0')}/${String(date.getMonth() + 1).padStart(2, '0')}/${date.getFullYear()}`;
-}
-
-function toDateKey(date) {
-  return formatDateInput(date);
 }
 
 function startOfDay(date) {

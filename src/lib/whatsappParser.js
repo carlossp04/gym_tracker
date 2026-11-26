@@ -28,6 +28,7 @@ export function normalizeChatText(text) {
   return text.replace(/^\uFEFF/, '').replace(/\r\n/g, '\n');
 }
 
+/** @returns {Record<string, import('./vaultTypes.js').TrainingEntry[]>} */
 export function parseWhatsAppChat(text) {
   const lines = text.split('\n');
   const users = {};

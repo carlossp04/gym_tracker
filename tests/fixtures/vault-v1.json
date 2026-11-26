@@ -1,0 +1,11 @@
+{
+  "version": 1,
+  "kdf": "PBKDF2",
+  "cipher": "AES-GCM",
+  "iterations": 250000,
+  "salt": "ROFt3DFnIz9G+T/RsiQO1A==",
+  "iv": "HcuEw+McElEgDugl",
+  "ciphertext": "hAfK0yCEG4JZ4VdFKSq55TqY/yRxOKTgTKiIP7I5zB3hjpT+VDRQyrwPhNlTLni6glWN8LTu+j8HK7wsnd2WGBHXJJDF32JlF4pHdUN9jVabbLTvxRb7/Q2Cmhdc",
+  "updatedAt": "2026-11-26T03:11:39.485Z",
+  "revision": 1
+}

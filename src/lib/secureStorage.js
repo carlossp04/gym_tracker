@@ -1,3 +1,5 @@
+import { validateVaultPayload } from './vaultPayload.js';
+import { base64ToBytes, decryptRecord, deriveKey, encryptRecord, openBackup } from './vaultCrypto.js';
 import { createClient } from '@supabase/supabase-js';
 
 const STORAGE_KEY = 'gym-tracker.encrypted-vault.v1';
@@ -8,8 +10,8 @@ const DEFAULT_VAULT_ID = 'entrenamientos';
 const supabaseUrl = typeof window === 'undefined' ? undefined : import.meta.env.VITE_SUPABASE_URL;
 const supabaseAnonKey = typeof window === 'undefined' ? undefined : import.meta.env.VITE_SUPABASE_ANON_KEY;
 const supabase = supabaseUrl && supabaseAnonKey ? createClient(supabaseUrl, supabaseAnonKey) : null;
-const encoder = new TextEncoder();
-const decoder = new TextDecoder();
+// Keep the salt bound to the key even if another tab opens a different vault.
+const keySalts = new WeakMap();
 
 export function hasEncryptedVault() {
   return Boolean(localStorage.getItem(STORAGE_KEY));
@@ -96,12 +98,12 @@ async function recordForUnlock(vaultId) {
   }
 }
 
-async function recoverPending(result, scope) {
+async function recoverPending(result, scope, salt) {
   const raw = localStorage.getItem(`${STORAGE_KEY}.pending:${scope}`);
   if (!raw) return result;
   const pending = JSON.parse(raw);
   // A different encryption salt means this is a replaced vault, not a draft to merge.
-  if (pending.salt !== readRecord()?.salt) return result;
+  if (pending.salt !== salt) return result;
   const payload = await decryptRecord(pending, result.key);
   return { ...result, payload, revision: pending.baseRevision, pending: true, conflict: pending.baseRevision !== result.revision };
 }
@@ -120,29 +122,20 @@ export async function createEncryptedVault(password, payload, vaultId) {
 export async function unlockEncryptedVault(password, vaultId) {
   const { record, scope, offline } = await recordForUnlock(vaultId);
   if (!record) return null;
-  writeLocalRecord(record);
-
-  const salt = base64ToBytes(record.salt);
-  const iv = base64ToBytes(record.iv);
-  const ciphertext = base64ToBytes(record.ciphertext);
-  const key = await deriveKey(password, salt);
-  const plaintext = await crypto.subtle.decrypt({ name: 'AES-GCM', iv }, key, ciphertext);
-  localStorage.setItem(`${STORAGE_KEY}.scope`, scope);
-  return recoverPending({
-    key,
-    payload: JSON.parse(decoder.decode(plaintext)),
-    revision: normalizeRevision(record.revision),
-    updatedAt: record.updatedAt,
-    offline,
-  }, scope);
+  const key = await deriveKey(password, base64ToBytes(record.salt));
+  return unlockRecord(record, key, scope, offline);
 }
 
 export async function unlockEncryptedVaultWithKey(key, vaultId) {
   const { record, scope, offline } = await recordForUnlock(vaultId);
   if (!record) return null;
-  writeLocalRecord(record);
+  return unlockRecord(record, key, scope, offline);
+}
 
+async function unlockRecord(record, key, scope, offline) {
   const payload = await decryptRecord(record, key);
+  keySalts.set(key, base64ToBytes(record.salt));
+  if (supabase && !offline) writeLocalRecord(record);
   localStorage.setItem(`${STORAGE_KEY}.scope`, scope);
   return recoverPending({
     key,
@@ -150,51 +143,93 @@ export async function unlockEncryptedVaultWithKey(key, vaultId) {
     revision: normalizeRevision(record.revision),
     updatedAt: record.updatedAt,
     offline,
-  }, scope);
+  }, scope, record.salt);
 }
 
 export async function saveEncryptedVault(key, payload, options = {}) {
   const { existingSalt, vaultId, expectedRevision } = options;
-  const currentRecord = readRecord();
-  const salt = existingSalt || (currentRecord?.salt ? base64ToBytes(currentRecord.salt) : null);
+  const salt = existingSalt || keySalts.get(key);
   if (!salt) throw new Error('No se encontró la sal criptográfica del vault.');
-
-  const currentRevision = normalizeRevision(currentRecord?.revision);
-
-  const iv = crypto.getRandomValues(new Uint8Array(12));
-  const plaintext = encoder.encode(JSON.stringify(payload));
-  const ciphertext = await crypto.subtle.encrypt({ name: 'AES-GCM', iv }, key, plaintext);
-
-  const record = {
-    version: 1,
-    kdf: 'PBKDF2',
-    cipher: 'AES-GCM',
-    iterations: 250000,
-    salt: bytesToBase64(salt),
-    iv: bytesToBase64(iv),
-    ciphertext: bytesToBase64(new Uint8Array(ciphertext)),
-    updatedAt: new Date().toISOString(),
-    revision: expectedRevision == null ? 1 : expectedRevision + 1,
-  };
-
+  const record = await encryptRecord(key, salt, payload, expectedRevision == null ? 1 : expectedRevision + 1);
+  keySalts.set(key, salt);
   const scope = await storageScope(vaultId);
   const pendingKey = `${STORAGE_KEY}.pending:${scope}`;
-  if (expectedRevision != null) localStorage.setItem(pendingKey, JSON.stringify({ ...record, baseRevision: expectedRevision }));
-  if (!supabase && expectedRevision != null && currentRevision !== expectedRevision) {
-    const error = createConflictError(); error.pendingSaved = true; throw error;
+  function stagePending() {
+    if (expectedRevision != null) localStorage.setItem(pendingKey, JSON.stringify({ ...record, baseRevision: expectedRevision }));
   }
 
+  function commit(savedRecord) {
+    writeLocalRecord(savedRecord);
+    localStorage.setItem(`${STORAGE_KEY}.scope`, scope);
+    // A different tab may still need its older conflicting draft for export.
+    const pending = localStorage.getItem(pendingKey);
+    if (pending) {
+      const recovery = JSON.parse(pending);
+      const resolved = supabase ? recovery.ciphertext === savedRecord.ciphertext : recovery.baseRevision === expectedRevision;
+      if (resolved) localStorage.removeItem(pendingKey);
+    }
+    return { revision: savedRecord.revision, updatedAt: savedRecord.updatedAt };
+  }
+
+  if (!supabase) {
+    return withLocalWriteLock(() => {
+      try {
+        checkLocalRevision(expectedRevision, record.salt);
+        return commit(record);
+      } catch (error) {
+        stagePending();
+        error.pendingSaved = expectedRevision != null;
+        throw error;
+      }
+    });
+  }
+
+  stagePending();
   let savedRecord;
   try {
-    savedRecord = supabase ? await persistRemoteRecord(vaultId, record, expectedRevision) : record;
+    savedRecord = await persistRemoteRecord(vaultId, record, expectedRevision);
   } catch (error) {
+    stagePending();
     error.pendingSaved = expectedRevision != null;
     throw error;
   }
-  writeLocalRecord(savedRecord);
-  localStorage.setItem(`${STORAGE_KEY}.scope`, scope);
-  localStorage.removeItem(pendingKey);
-  return { revision: savedRecord.revision, updatedAt: savedRecord.updatedAt };
+  return commit(savedRecord);
+}
+
+function checkLocalRevision(expectedRevision, expectedSalt) {
+  const current = readRecord();
+  if (expectedRevision == null) {
+    if (current) throw createConflictError();
+    return;
+  }
+  if (!current || normalizeRevision(current.revision) !== expectedRevision || (expectedSalt && current.salt !== expectedSalt)) {
+    throw createConflictError();
+  }
+}
+
+function withLocalWriteLock(write) {
+  if (globalThis.navigator?.locks) return navigator.locks.request(STORAGE_KEY, write);
+  // Older browsers serialize read/write transactions on the same IndexedDB store.
+  if (typeof indexedDB !== 'undefined') return withIndexedDbLock(write);
+  if (typeof window === 'undefined') return write();
+  throw new Error('No se pudo obtener el bloqueo para guardar en este dispositivo.');
+}
+
+async function withIndexedDbLock(write) {
+  const db = await openRememberedKeysDb();
+  try {
+    return await new Promise((resolve, reject) => {
+      const tx = db.transaction(REMEMBERED_KEYS_STORE, 'readwrite');
+      let result;
+      tx.objectStore(REMEMBERED_KEYS_STORE).count().onsuccess = () => {
+        try { result = write(); } catch (error) { reject(error); tx.abort(); }
+      };
+      tx.oncomplete = () => resolve(result);
+      tx.onabort = () => reject(tx.error);
+    });
+  } finally {
+    db.close();
+  }
 }
 
 export function exportEncryptedVault() {
@@ -202,27 +237,23 @@ export function exportEncryptedVault() {
   return (scope && localStorage.getItem(`${STORAGE_KEY}.pending:${scope}`)) || localStorage.getItem(STORAGE_KEY);
 }
 
-export async function replaceEncryptedVault(serializedVault, vaultId, expectedRevision) {
-  const parsed = JSON.parse(serializedVault);
-  if (!parsed.version || !parsed.salt || !parsed.iv || !parsed.ciphertext) {
-    throw new Error('Archivo cifrado inválido.');
+export async function replaceEncryptedVault(serializedVault, vaultId, expectedRevision, password) {
+  const { record, key, salt, payload } = await openBackup(serializedVault, password);
+  validateVaultPayload(payload);
+  const scope = await storageScope(vaultId);
+  const nextRecord = { ...record, updatedAt: new Date().toISOString(), revision: expectedRevision + 1 };
+  function commit(record) {
+    writeLocalRecord(record);
+    localStorage.setItem(`${STORAGE_KEY}.scope`, scope);
+    localStorage.removeItem(`${STORAGE_KEY}.pending:${scope}`);
+    keySalts.set(key, salt);
+    return { key, payload, revision: record.revision, updatedAt: record.updatedAt };
   }
-
-  if (!supabase && expectedRevision != null && normalizeRevision(readRecord()?.revision) !== expectedRevision) {
-    throw createConflictError();
-  }
-
-  const nextRecord = {
-    ...parsed,
-    updatedAt: new Date().toISOString(),
-    revision: expectedRevision == null ? normalizeRevision(parsed.revision) : expectedRevision + 1,
-  };
-  const savedRecord = supabase
-    ? await updateRemoteRecord(vaultId, nextRecord, expectedRevision)
-    : nextRecord;
-  writeLocalRecord(savedRecord);
-  localStorage.removeItem(`${STORAGE_KEY}.pending:${await storageScope(vaultId)}`);
-  return { revision: savedRecord.revision, updatedAt: savedRecord.updatedAt };
+  if (supabase) return commit(await updateRemoteRecord(vaultId, nextRecord, expectedRevision));
+  return withLocalWriteLock(() => {
+    checkLocalRevision(expectedRevision);
+    return commit(nextRecord);
+  });
 }
 
 export async function deleteEncryptedVault(vaultId) {
@@ -286,29 +317,6 @@ export async function forgetRememberedVaultKey(vaultId) {
     request.onsuccess = () => resolve();
     request.onerror = () => reject(request.error);
   });
-}
-
-async function deriveKey(password, salt) {
-  const material = await crypto.subtle.importKey('raw', encoder.encode(password), 'PBKDF2', false, ['deriveKey']);
-  return crypto.subtle.deriveKey(
-    {
-      name: 'PBKDF2',
-      salt,
-      iterations: 250000,
-      hash: 'SHA-256',
-    },
-    material,
-    { name: 'AES-GCM', length: 256 },
-    false,
-    ['encrypt', 'decrypt'],
-  );
-}
-
-async function decryptRecord(record, key) {
-  const iv = base64ToBytes(record.iv);
-  const ciphertext = base64ToBytes(record.ciphertext);
-  const plaintext = await crypto.subtle.decrypt({ name: 'AES-GCM', iv }, key, ciphertext);
-  return JSON.parse(decoder.decode(plaintext));
 }
 
 function readRecord() {
@@ -433,21 +441,4 @@ function createConflictError() {
   const error = new Error('El vault cambió en otro dispositivo. Bloquea y vuelve a abrir antes de guardar.');
   error.code = 'VAULT_CONFLICT';
   return error;
-}
-
-function bytesToBase64(bytes) {
-  let binary = '';
-  bytes.forEach((byte) => {
-    binary += String.fromCharCode(byte);
-  });
-  return btoa(binary);
-}
-
-function base64ToBytes(base64) {
-  const binary = atob(base64);
-  const bytes = new Uint8Array(binary.length);
-  for (let index = 0; index < binary.length; index += 1) {
-    bytes[index] = binary.charCodeAt(index);
-  }
-  return bytes;
 }

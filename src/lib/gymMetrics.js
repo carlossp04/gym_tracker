@@ -1,3 +1,4 @@
+import { isValidTrainingDate, parseChartDate } from './trainingDates.js';
 export function truncateText(text, maxLength = 25) {
   if (!text) return '';
   if (text.length <= maxLength) return text;
@@ -35,7 +36,7 @@ export function applyEntryEdits(parsedData, entryEdits, deletedEntryIds = {}) {
       const weight = normalizePositiveNumber(edit.weight, entry.weight);
       const nextEntry = {
         ...entry,
-        date: cleanTextValue(edit.date) || entry.date,
+        date: isValidTrainingDate(edit.date) ? edit.date.trim() : entry.date,
         dayLabel: cleanTextValue(edit.dayLabel) || entry.dayLabel,
         exercise: cleanTextValue(edit.exercise) || entry.exercise,
         sets,
@@ -78,7 +79,7 @@ export function getProgressChartData(processedData, selectedUser, selectedExerci
 
   const rawData = processedData[selectedUser]
     .filter((entry) => entry.exercise === selectedExercise)
-    .sort((a, b) => parseChatDate(a.date) - parseChatDate(b.date));
+    .sort((a, b) => parseChartDate(a.date) - parseChartDate(b.date));
 
   const groupedByDate = rawData.reduce((acc, curr) => {
     if (!acc[curr.date]) acc[curr.date] = [];
@@ -113,7 +114,7 @@ export function getComparisonChartData(processedData, comparisonExercise, weight
     });
   });
 
-  return Object.values(dataByDate).sort((a, b) => parseChatDate(a.date) - parseChatDate(b.date));
+  return Object.values(dataByDate).sort((a, b) => parseChartDate(a.date) - parseChartDate(b.date));
 }
 
 export function getGeneralComparisonChartData(processedData) {
@@ -134,7 +135,7 @@ export function getGeneralComparisonChartData(processedData) {
   const cumulativeReps = Object.fromEntries(users.map((user) => [user, 0]));
 
   return Object.values(volumeByDate)
-    .sort((a, b) => parseChatDate(a.date) - parseChatDate(b.date))
+    .sort((a, b) => parseChartDate(a.date) - parseChartDate(b.date))
     .map((item) => {
       const row = { date: item.date };
       users.forEach((user) => {
@@ -155,7 +156,7 @@ export function getWeeklyVolumeChartData(processedData) {
   Object.entries(processedData).forEach(([user, entries]) => {
     entries.forEach((entry) => {
       const weekKey = getWeekKey(entry.date);
-      if (!weeklyVolume[weekKey]) weeklyVolume[weekKey] = { week: weekKey, sortDate: getWeekStart(parseChatDate(entry.date)) };
+      if (!weeklyVolume[weekKey]) weeklyVolume[weekKey] = { week: weekKey, sortDate: getWeekStart(parseChartDate(entry.date)) };
       weeklyVolume[weekKey][user] = (weeklyVolume[weekKey][user] || 0) + entry.volumen;
       weeklyVolume[weekKey][`${user}__reps`] = (weeklyVolume[weekKey][`${user}__reps`] || 0) + entry.sets * entry.reps;
     });
@@ -334,18 +335,12 @@ function roundToOneDecimal(value) {
   return Math.round(value * 10) / 10;
 }
 
-function parseChatDate(date) {
-  const [day, month, year] = date.split(/[/.-]/);
-  const fullYear = year.length === 2 ? `20${year}` : year;
-  return new Date(`${fullYear}-${month}-${day}`);
-}
-
 function buildWorkoutKey(user, date, dayLabel) {
   return `${date}__${user}__${dayLabel}`;
 }
 
 function getWeekKey(date) {
-  const weekStart = getWeekStart(parseChatDate(date));
+  const weekStart = getWeekStart(parseChartDate(date));
   const day = String(weekStart.getDate()).padStart(2, '0');
   const month = String(weekStart.getMonth() + 1).padStart(2, '0');
   return `${day}/${month}`;
@@ -374,7 +369,7 @@ function getExerciseProgress(entries) {
         if (!acc[entry.date] || entry.weight > acc[entry.date].weight) acc[entry.date] = entry;
         return acc;
       }, {}),
-    ).sort((a, b) => parseChatDate(a.date) - parseChatDate(b.date));
+    ).sort((a, b) => parseChartDate(a.date) - parseChartDate(b.date));
     const first = maxByDate[0];
     const latest = maxByDate[maxByDate.length - 1];
     const improvement = first.weight === 0 ? 0 : ((latest.weight - first.weight) / first.weight) * 100;

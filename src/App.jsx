@@ -1,3 +1,6 @@
+import { isValidTrainingDate, parseTrainingDate, inputToDisplayDate } from './lib/trainingDates.js';
+import { useVaultPersistence } from './lib/useVaultPersistence';
+import { validateVaultPayload } from './lib/vaultPayload';
 import ConfirmationDialog from './components/ConfirmationDialog';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { initialTrainingText, userColors } from './constants/appConstants';
@@ -47,7 +50,6 @@ import {
   rememberVaultKey,
   replaceEncryptedVault,
   remoteVaultExists,
-  saveEncryptedVault,
   saveVaultId,
   signInRemoteAccount,
   signOutRemoteAccount,
@@ -62,8 +64,6 @@ const ALL_USERS_OPTION = 'Todos los usuarios';
 export default function GymTracker() {
   const [trainingText, setTrainingText] = useState('');
   const [parsedData, setParsedData] = useState(null);
-  const [cryptoKey, setCryptoKey] = useState(null);
-  const [isUnlocked, setIsUnlocked] = useState(false);
   const [vaultId, setVaultId] = useState(() => getSavedVaultId());
   const [initialAutoUnlockVaultId] = useState(() => getSavedVaultId());
   const [isRemoteStorage] = useState(() => isRemoteStorageEnabled());
@@ -84,15 +84,8 @@ export default function GymTracker() {
   const [saveStatus, setSaveStatus] = useState('idle');
   const [confirmation, setConfirmation] = useState(null);
   const [saveMessage, setSaveMessage] = useState('');
-  const revisionRef = useRef(null);
-  const saveQueue = useRef(Promise.resolve());
-  const committedPayloadRef = useRef({});
-  const liveDraftRef = useRef({ activeWorkout: null, uiDrafts: {} });
-  const savedDraftRef = useRef('');
-  const conflictRef = useRef(false);
-  const restoringRef = useRef(false);
+  const stagedBackup = useRef(null);
   const [uiDrafts, setUiDrafts] = useState({});
-  const [retrySave, setRetrySave] = useState(0);
   const [completedWorkout, setCompletedWorkout] = useState(null);
   const [remoteVaults, setRemoteVaults] = useState([]);
   const [vaultListMessage, setVaultListMessage] = useState('');
@@ -122,6 +115,7 @@ export default function GymTracker() {
   const [moreWeightReminders, setMoreWeightReminders] = useState({});
   const canEdit = true;
   const remoteUser = remoteSession?.user || null;
+  const remoteUserId = remoteUser?.id;
 
   const editedData = useMemo(
     () => applyEntryEdits(parsedData, entryEdits, deletedEntryIds),
@@ -161,15 +155,25 @@ export default function GymTracker() {
     }
   }, [progressExerciseOptions, selectedExercise]);
 
-  const loadTrainingPayload = useCallback((payload, key, metadata = {}) => {
-    const cleanText = normalizeChatText(payload.trainingText || '');
-    const parsed = parseWhatsAppChat(cleanText);
-    const { isValid } = validateParsedData(parsed);
-
-    if (cleanText.trim() && !isValid) {
-      throw new Error('Datos desencriptados sin entrenamientos válidos.');
+  const applySavedChanges = useCallback((patch) => {
+    if (Object.hasOwn(patch, 'trainingText')) {
+      setTrainingText(patch.trainingText);
+      setParsedData(parseWhatsAppChat(patch.trainingText));
     }
+    if (patch.aliases) setAliases(patch.aliases);
+    if (patch.entryEdits) setEntryEdits(patch.entryEdits);
+    if (patch.deletedEntryIds) setDeletedEntryIds(patch.deletedEntryIds);
+    if (patch.routines) setRoutines(patch.routines);
+    if (Object.hasOwn(patch, 'activeWorkout')) setActiveWorkout(patch.activeWorkout);
+    if (patch.moreWeightReminders) setMoreWeightReminders(patch.moreWeightReminders);
+  }, []);
 
+  const { session, open, close, retry } = useVaultPersistence(
+    activeWorkout, uiDrafts, setSaveStatus, setSaveMessage, applySavedChanges,
+  );
+
+  const loadTrainingPayload = useCallback((payload, key, metadata, openedVaultId) => {
+    const { cleanText, parsed } = validateVaultPayload(payload);
     setTrainingText(cleanText);
     setParsedData(parsed);
     setAliases(payload.aliases || {});
@@ -183,22 +187,15 @@ export default function GymTracker() {
     setSelectedUser(payload.uiDrafts?.profile || '');
     setSelectedExercise(payload.uiDrafts?.progressExercise || '');
     setProgressWeightMode(payload.uiDrafts?.weightMode || 'average');
-    committedPayloadRef.current = { ...payload, trainingText: cleanText, aliases: payload.aliases || {}, entryEdits: payload.entryEdits || {}, deletedEntryIds: payload.deletedEntryIds || {}, routines: payload.routines || [], activeWorkout: payload.activeWorkout || null, uiDrafts: payload.uiDrafts || {} };
-    liveDraftRef.current = { activeWorkout: payload.activeWorkout || null, uiDrafts: payload.uiDrafts || {} };
-    savedDraftRef.current = metadata.pending ? '' : JSON.stringify([payload.activeWorkout?.exercises ? payload.activeWorkout : null, payload.uiDrafts || {}]);
-    conflictRef.current = Boolean(metadata.conflict);
-    setCryptoKey(key);
-    revisionRef.current = metadata.revision ?? 1;
-    setIsUnlocked(true);
+    open({ ...payload, trainingText: cleanText }, key, metadata, openedVaultId);
     setAuthError('');
     setSaveStatus(metadata.pending ? 'error' : 'idle');
     setSaveMessage(metadata.conflict ? 'Hay cambios pendientes y otra versión en la nube. Descarga una copia antes de volver a abrir; no se sobrescribirá la otra versión.' : metadata.pending ? 'Cambios recuperados en este dispositivo. Pendientes de sincronizar.' : '');
-  }, []);
+  }, [open]);
 
   const clearUnlockedState = useCallback(() => {
-    setIsUnlocked(false);
-    setCryptoKey(null);
-    revisionRef.current = null;
+    close();
+    stagedBackup.current = null;
     setParsedData(null);
     setTrainingText('');
     setAliases({});
@@ -219,10 +216,10 @@ export default function GymTracker() {
     setCompletedWorkout(null);
     setRecordsOrigin(null);
     setActiveTab('today');
-  }, []);
+  }, [close]);
 
   useEffect(() => {
-    if (!isRemoteStorage || !remoteUser) return;
+    if (!isRemoteStorage || !remoteUserId) return;
     let cancelled = false;
     listRemoteVaults().then((items) => {
       if (!cancelled) { setRemoteVaults(items); setVaultId((current) => items.length && !items.some((item) => item.id === current) ? items[0].id : current); }
@@ -230,7 +227,7 @@ export default function GymTracker() {
       if (!cancelled) setVaultListMessage('No se pudieron cargar tus espacios. Puedes introducir el nombre manualmente.');
     });
     return () => { cancelled = true; };
-  }, [isRemoteStorage, remoteUser]);
+  }, [isRemoteStorage, remoteUserId]);
 
   useEffect(() => {
     if (!isRemoteStorage) return undefined;
@@ -267,14 +264,14 @@ export default function GymTracker() {
     const unlockRememberedDevice = async () => {
       const cleanVaultId = initialAutoUnlockVaultId.trim();
 
-      if (isRemoteStorage && (!isRemoteAuthReady || !remoteUser)) {
+      if (isRemoteStorage && (!isRemoteAuthReady || !remoteUserId)) {
         if (isRemoteAuthReady) setIsCheckingRememberedDevice(false);
         return;
       }
 
       try {
         setIsCheckingRememberedDevice(true);
-        const rememberedKeyId = getRememberedKeyId(cleanVaultId, remoteUser?.id);
+        const rememberedKeyId = getRememberedKeyId(cleanVaultId, remoteUserId);
         const rememberedKey = await getRememberedVaultKey(rememberedKeyId);
         if (!rememberedKey || isCancelled) return;
 
@@ -282,11 +279,12 @@ export default function GymTracker() {
         const result = await unlockEncryptedVaultWithKey(rememberedKey, cleanVaultId);
         if (!result || isCancelled) return;
 
-        loadTrainingPayload(result.payload, result.key, result);
+        loadTrainingPayload(result.payload, result.key, result, cleanVaultId);
+        setVaultId(cleanVaultId);
         setRememberDevice(true);
       } catch {
         try {
-          await forgetRememberedVaultKey(getRememberedKeyId(cleanVaultId, remoteUser?.id));
+          await forgetRememberedVaultKey(getRememberedKeyId(cleanVaultId, remoteUserId));
         } catch {
           // Ignore cleanup errors; the normal password flow remains available.
         }
@@ -303,7 +301,7 @@ export default function GymTracker() {
     return () => {
       isCancelled = true;
     };
-  }, [initialAutoUnlockVaultId, isRemoteAuthReady, isRemoteStorage, loadTrainingPayload, remoteUser]);
+  }, [initialAutoUnlockVaultId, isRemoteAuthReady, isRemoteStorage, loadTrainingPayload, remoteUserId]);
 
   const rememberCurrentVaultKey = async (cleanVaultId, key) => {
     if (!rememberDevice) return;
@@ -370,17 +368,23 @@ export default function GymTracker() {
       const cleanVaultId = vaultId.trim();
       saveVaultId(cleanVaultId);
 
-      if (isRemoteStorage) {
+      const backup = stagedBackup.current;
+      if (backup && backup.vaultId === cleanVaultId && backup.owner === remoteUser?.id) {
+        const result = await replaceEncryptedVault(backup.text, cleanVaultId, backup.revision, password);
+        stagedBackup.current = null;
+        await rememberCurrentVaultKey(cleanVaultId, result.key);
+        loadTrainingPayload(result.payload, result.key, result, cleanVaultId);
+      } else if (isRemoteStorage) {
         const result = await unlockEncryptedVault(password, cleanVaultId);
         if (!result) { setAuthError('No existe ningún espacio con ese nombre. Puedes crear uno nuevo.'); return; }
         const { key, payload } = result;
         await rememberCurrentVaultKey(cleanVaultId, key);
-        loadTrainingPayload(payload, key, result);
+        loadTrainingPayload(payload, key, result, cleanVaultId);
       } else if (hasVault) {
         const result = await unlockEncryptedVault(password);
         const { key, payload } = result;
         await rememberCurrentVaultKey(cleanVaultId, key);
-        loadTrainingPayload(payload, key, result);
+        loadTrainingPayload(payload, key, result, cleanVaultId);
       } else {
         const payload = {
           trainingText: includeDemo ? normalizeChatText(initialTrainingText) : '',
@@ -394,10 +398,12 @@ export default function GymTracker() {
         const { key } = result;
         await rememberCurrentVaultKey(cleanVaultId, key);
         setHasVault(true);
-        loadTrainingPayload(payload, key, result);
+        loadTrainingPayload(payload, key, result, cleanVaultId);
       }
-    } catch {
-      setAuthError('Contraseña incorrecta o datos cifrados corruptos.');
+    } catch (error) {
+      setAuthError(stagedBackup.current
+        ? `No se pudo restaurar la copia. ${error.code === 'VAULT_CONFLICT' ? 'El espacio cambió.' : 'Comprueba la contraseña de la copia.'} Recarga para volver al espacio original.`
+        : 'Contraseña incorrecta o datos cifrados corruptos.');
     } finally {
       setIsUnlocking(false);
     }
@@ -427,7 +433,7 @@ export default function GymTracker() {
       const result = await createEncryptedVault(password, payload, cleanVaultId);
       setRemoteVaults((current) => [...current.filter((space) => space.id !== cleanVaultId), { id: cleanVaultId }]);
       await rememberCurrentVaultKey(cleanVaultId, result.key);
-      loadTrainingPayload(payload, result.key, result);
+      loadTrainingPayload(payload, result.key, result, cleanVaultId);
     } catch (error) {
       setAuthError(error.message || 'No se pudo crear el vault remoto.');
     } finally {
@@ -461,82 +467,8 @@ export default function GymTracker() {
     return { cleanText, parsed };
   };
 
-  const persistPayload = useCallback(async (
-    nextTrainingText,
-    nextAliases,
-    nextEntryEdits = entryEdits,
-    nextDeletedEntryIds = deletedEntryIds,
-    nextRoutines = routines,
-    nextActiveWorkout = activeWorkout,
-    nextMoreWeightReminders,
-  ) => {
-    const patch = {};
-    // Merge only deliberate changes at execution time. An autosave queued during
-    // a routine/history save must not put an older snapshot back into the vault.
-    if (nextTrainingText !== trainingText) patch.trainingText = nextTrainingText;
-    if (nextAliases !== aliases) patch.aliases = nextAliases;
-    if (nextEntryEdits !== entryEdits) patch.entryEdits = nextEntryEdits;
-    if (nextDeletedEntryIds !== deletedEntryIds) patch.deletedEntryIds = nextDeletedEntryIds;
-    if (nextRoutines !== routines) patch.routines = nextRoutines;
-    if (nextActiveWorkout !== activeWorkout) patch.activeWorkout = nextActiveWorkout;
-    if (nextMoreWeightReminders !== undefined) patch.moreWeightReminders = nextMoreWeightReminders;
-    const task = saveQueue.current.catch(() => {}).then(async () => {
-      if (conflictRef.current) {
-        const message = 'Conflicto entre dispositivos. Descarga una copia de tus cambios antes de volver a abrir.';
-        setSaveStatus('error'); setSaveMessage(message); throw new Error(message);
-      }
-      setSaveStatus('saving');
-      setSaveMessage('Guardando…');
-      try {
-      const payload = { ...committedPayloadRef.current, ...liveDraftRef.current, ...patch };
-      const metadata = await saveEncryptedVault(cryptoKey, payload, {
-        vaultId: vaultId.trim(),
-        expectedRevision: revisionRef.current,
-      });
-      revisionRef.current = metadata.revision;
-      committedPayloadRef.current = payload;
-      if (Object.hasOwn(patch, 'activeWorkout')) liveDraftRef.current = { ...liveDraftRef.current, activeWorkout: patch.activeWorkout };
-      savedDraftRef.current = JSON.stringify([payload.activeWorkout, payload.uiDrafts]);
-      setSaveStatus('success');
-      setSaveMessage('Guardado');
-      return metadata;
-    } catch (error) {
-      if (error.code === 'VAULT_CONFLICT') conflictRef.current = true;
-      setSaveStatus('error');
-      setSaveMessage(error.code === 'VAULT_CONFLICT' ? 'Otra versión cambió. Tus cambios están guardados cifrados en este dispositivo; descarga una copia desde Opciones.' : `${error.message || 'No se pudo guardar.'} ${error.pendingSaved ? 'Los cambios pendientes se conservan cifrados en este dispositivo.' : 'No se ha podido confirmar una copia local de estos cambios. Mantén esta pestaña abierta y reintenta.'}`);
-      throw error;
-    }
-    });
-    saveQueue.current = task;
-    return task;
-  }, [activeWorkout, aliases, cryptoKey, deletedEntryIds, entryEdits, routines, trainingText, vaultId]);
-
-  useEffect(() => {
-    liveDraftRef.current = { activeWorkout, uiDrafts };
-  }, [activeWorkout, uiDrafts]);
-
-  const draftSignature = JSON.stringify([activeWorkout, uiDrafts]);
-  useEffect(() => {
-    if (!isUnlocked || !cryptoKey || conflictRef.current || draftSignature === savedDraftRef.current) return;
-    const timer = window.setTimeout(() => {
-      if (restoringRef.current) return;
-      persistPayload(trainingText, aliases).catch(() => {});
-    }, 350);
-    return () => window.clearTimeout(timer);
-  }, [draftSignature, isUnlocked, cryptoKey, persistPayload, trainingText, aliases, retrySave]);
-
-  useEffect(() => {
-    const retry = () => setRetrySave((value) => value + 1);
-    const protect = (event) => {
-      if (isUnlocked && draftSignature !== savedDraftRef.current) { event.preventDefault(); event.returnValue = ''; }
-    };
-    window.addEventListener('online', retry);
-    window.addEventListener('beforeunload', protect);
-    return () => { window.removeEventListener('online', retry); window.removeEventListener('beforeunload', protect); };
-  }, [isUnlocked, draftSignature]);
-
   const changeDraft = (key, value) => {
-    if (conflictRef.current) return;
+    if (session?.conflict) return;
     setUiDrafts((current) => {
       const next = { ...current, [key]: value };
       if (value === undefined) delete next[key];
@@ -547,7 +479,7 @@ export default function GymTracker() {
   };
 
   const selectTrainingProfile = (name) => {
-    if (conflictRef.current) return;
+    if (session?.conflict) return;
     if (trainingProfile && !availableUsers.includes(trainingProfile)) {
       changeDraft('trainingProfiles', [...new Set([...(uiDrafts.trainingProfiles || []), trainingProfile])]);
     }
@@ -556,7 +488,7 @@ export default function GymTracker() {
   };
 
   const createTrainingProfile = (name) => {
-    if (conflictRef.current) return 'Resuelve el conflicto de guardado antes de crear un perfil.';
+    if (session?.conflict) return 'Resuelve el conflicto de guardado antes de crear un perfil.';
     if (!name) return 'Escribe un nombre para el perfil.';
     if (name.includes(':')) return 'El nombre del perfil no puede contener dos puntos.';
     const normalizedName = name.toLocaleLowerCase('es');
@@ -575,7 +507,7 @@ export default function GymTracker() {
   };
 
   const changeWorkout = (workout) => {
-    if (conflictRef.current) return;
+    if (session?.conflict) return;
     setActiveWorkout(workout);
     setSaveStatus('pending');
     setSaveMessage('Cambios pendientes de guardar…');
@@ -604,10 +536,9 @@ export default function GymTracker() {
     block,
     successMessage,
     expectedAddedEntries = null,
-    nextActiveWorkout = activeWorkout,
-    nextMoreWeightReminders,
+    changes = {},
   ) => {
-    if (!canEdit || !block.trim() || !cryptoKey) return false;
+    if (!canEdit || !block.trim() || !session) return false;
 
     try {
       setSaveStatus('saving');
@@ -624,9 +555,7 @@ export default function GymTracker() {
         }
       }
 
-      await persistPayload(cleanText, aliases, entryEdits, deletedEntryIds, routines, nextActiveWorkout, nextMoreWeightReminders);
-      setTrainingText(cleanText);
-      setParsedData(parsed);
+      await session.save({ trainingText: cleanText, ...changes });
       setSaveStatus('success');
       setSaveMessage(successMessage);
       return true;
@@ -639,8 +568,7 @@ export default function GymTracker() {
 
   const saveRoutines = async (nextRoutines) => {
     try {
-      await persistPayload(trainingText, aliases, entryEdits, deletedEntryIds, nextRoutines, activeWorkout);
-      setRoutines(nextRoutines);
+      await session.save({ routines: nextRoutines });
       setSaveMessage('Rutina guardada.');
       return true;
     } catch {
@@ -652,8 +580,8 @@ export default function GymTracker() {
     if (activeWorkout) { setActiveTab('training'); return; }
     const workout = workoutFromEntries(entries, entries[0].user);
     try {
-      await persistPayload(trainingText, aliases, entryEdits, deletedEntryIds, routines, workout);
-      setActiveWorkout(workout); setCompletedWorkout(null); setActiveTab('training');
+      await session.save({ activeWorkout: workout });
+      setCompletedWorkout(null); setActiveTab('training');
     } catch { /* Global save feedback explains the failure. */ }
   };
 
@@ -673,24 +601,24 @@ export default function GymTracker() {
   const startTemplateWorkout = async ({ routineId, sessionId, user, date, sessionOverride }) => {
     if (activeWorkout) { setActiveTab('training'); return false; }
     const routine = routines.find((item) => item.id === routineId);
-    const session = sessionOverride || routine?.sessions.find((item) => item.id === sessionId);
-    if (!routine || !session || !user.trim() || !date || session.exercises.length === 0) return false;
+    const template = sessionOverride || routine?.sessions.find((item) => item.id === sessionId);
+    if (!routine || !template || !user.trim() || !date || template.exercises.length === 0) return false;
     if (user.includes(':')) {
       setSaveStatus('error');
       setSaveMessage('El nombre del usuario no puede contener dos puntos.');
       return false;
     }
 
-      const nextWorkout = {
+    const nextWorkout = {
       id: crypto.randomUUID(),
       routineId: routine.id,
       routineName: routine.name,
-      sessionId: session.id,
-      sessionName: session.name,
+      sessionId: template.id,
+      sessionName: template.name,
       user: user.trim(),
       date,
       startedAt: new Date().toISOString(),
-      exercises: session.exercises.map((templateExercise) => {
+      exercises: template.exercises.map((templateExercise) => {
         const suggestedWeight = getLatestExerciseWeight(trainingEntries, user.trim(), templateExercise.exercise);
         return {
           id: crypto.randomUUID(),
@@ -712,9 +640,7 @@ export default function GymTracker() {
 
     try {
       const nextRoutines = sessionOverride ? routines.map((item) => item.id === routineId ? { ...item, sessions: item.sessions.map((current) => current.id === sessionId ? sessionOverride : current) } : item) : routines;
-      await persistPayload(trainingText, aliases, entryEdits, deletedEntryIds, nextRoutines, nextWorkout);
-      if (sessionOverride) setRoutines(nextRoutines);
-      setActiveWorkout(nextWorkout);
+      await session.save(sessionOverride ? { activeWorkout: nextWorkout, routines: nextRoutines } : { activeWorkout: nextWorkout });
       setCompletedWorkout(null);
       setActiveTab('training');
       setSaveMessage('Entrenamiento iniciado y guardado.');
@@ -727,7 +653,7 @@ export default function GymTracker() {
   const saveActiveWorkout = async () => {
     if (!activeWorkout) return false;
     try {
-      await persistPayload(trainingText, aliases, entryEdits, deletedEntryIds, routines, activeWorkout);
+      await session.save();
       setSaveMessage('Progreso del entrenamiento guardado.');
       return true;
     } catch {
@@ -773,22 +699,16 @@ export default function GymTracker() {
       block,
       'Entrenamiento finalizado y series completadas guardadas.',
       completedEntries.length,
-      null,
-      nextMoreWeightReminders,
+      { activeWorkout: null, moreWeightReminders: nextMoreWeightReminders },
     );
-    if (wasSaved) {
-      setMoreWeightReminders(nextMoreWeightReminders);
-      setCompletedWorkout({ ...activeWorkout, completedEntries });
-      setActiveWorkout(null);
-    }
+    if (wasSaved) setCompletedWorkout({ ...activeWorkout, completedEntries });
     return wasSaved;
   };
 
   const cancelActiveWorkout = async () => {
     if (!activeWorkout) return false;
     try {
-      await persistPayload(trainingText, aliases, entryEdits, deletedEntryIds, routines, null);
-      setActiveWorkout(null);
+      await session.save({ activeWorkout: null });
       setActiveTab('today');
       setSaveMessage('Entrenamiento activo descartado.');
       return true;
@@ -798,9 +718,7 @@ export default function GymTracker() {
   };
 
   const exportVault = async () => {
-    if (isUnlocked && draftSignature !== savedDraftRef.current && !conflictRef.current) {
-      try { await persistPayload(trainingText, aliases); } catch { /* Export the encrypted recovery copy if synchronization failed. */ }
-    }
+    try { await session?.flush(); } catch { /* Export the encrypted recovery copy. */ }
     const vault = exportEncryptedVault();
     if (!vault) return;
 
@@ -827,29 +745,24 @@ export default function GymTracker() {
     try {
       const text = await file.text();
       if (!window.confirm('Esta copia sustituirá los datos actuales. ¿Restaurar copia de seguridad?')) return;
-      restoringRef.current = true;
-      await saveQueue.current.catch(() => {});
-      await replaceEncryptedVault(text, vaultId.trim(), revisionRef.current);
-      savedDraftRef.current = draftSignature;
-      await lockApp();
-      setHasVault(true);
-      setAuthError('Backup importado. Introduce contraseña para desbloquear.');
+      const target = { text, vaultId: vaultId.trim(), owner: remoteUser?.id };
+      if (!(await lockApp())) return;
+      stagedBackup.current = { ...target, revision: session.revision };
+      setAuthError('Introduce la contraseña de la copia para restaurarla.');
     } catch (error) {
       setSaveStatus('error');
       setSaveMessage(error.message || 'No se pudo importar el backup cifrado.');
     } finally {
-      restoringRef.current = false;
       event.target.value = '';
     }
   };
 
   const lockApp = async () => {
-    if (isUnlocked && draftSignature !== savedDraftRef.current && !conflictRef.current) {
-      try { await persistPayload(trainingText, aliases); } catch (error) {
-        if (!error.pendingSaved && !window.confirm('No se pudieron guardar los últimos cambios. ¿Bloquear y descartarlos de esta sesión?')) return false;
-      }
+    try {
+      await session?.flush();
+    } catch (error) {
+      if (!error.pendingSaved && !window.confirm('No se pudieron guardar los últimos cambios. ¿Bloquear y descartarlos de esta sesión?')) return false;
     }
-    await saveQueue.current.catch(() => {});
     try {
       await forgetRememberedVaultKey(getRememberedKeyId(vaultId.trim(), remoteUser?.id));
     } catch {
@@ -890,13 +803,12 @@ export default function GymTracker() {
     });
 
     try {
-      await persistPayload(trainingText, newAliases);
-      setAliases(newAliases);
+      await session.save({ aliases: newAliases });
       setSelectedForMerge([]);
       setShowMergeModal(false);
       if (selectedForMerge.includes(selectedExercise)) setSelectedExercise(newName);
     } catch {
-      // persistPayload exposes the conflict or storage error in the global banner.
+      // The save handler exposes the conflict or storage error in the global banner.
     }
   };
 
@@ -934,12 +846,11 @@ export default function GymTracker() {
     });
 
     try {
-      await persistPayload(trainingText, newAliases);
-      setAliases(newAliases);
+      await session.save({ aliases: newAliases });
       setRenamingExercise(null);
       if (selectedExercise === renamingExercise) setSelectedExercise(finalName);
     } catch {
-      // persistPayload exposes the conflict or storage error in the global banner.
+      // The save handler exposes the conflict or storage error in the global banner.
     }
   };
 
@@ -998,9 +909,7 @@ export default function GymTracker() {
         delete nextEntryEdits[entry.id];
       });
 
-      await persistPayload(trainingText, aliases, nextEntryEdits, nextDeletedEntryIds);
-      setEntryEdits(nextEntryEdits);
-      setDeletedEntryIds(nextDeletedEntryIds);
+      await session.save({ entryEdits: nextEntryEdits, deletedEntryIds: nextDeletedEntryIds });
       setSaveStatus('success');
       setSaveMessage(successMessage);
     } catch (error) {
@@ -1055,7 +964,7 @@ export default function GymTracker() {
     const reps = Number(editForm.reps);
     const weight = Number(editForm.weight);
 
-    if (!editForm.user.trim() || !editForm.date.trim() || !editForm.exercise.trim() || sets <= 0 || reps <= 0 || weight <= 0) {
+    if (!editForm.user.trim() || !isValidTrainingDate(editForm.date) || !editForm.exercise.trim() || sets <= 0 || reps <= 0 || weight <= 0) {
       setSaveStatus('error');
       setSaveMessage('Completa usuario, fecha, ejercicio, series, reps y peso válido.');
       return;
@@ -1078,8 +987,7 @@ export default function GymTracker() {
         },
       };
 
-      await persistPayload(trainingText, aliases, nextEntryEdits);
-      setEntryEdits(nextEntryEdits);
+      await session.save({ entryEdits: nextEntryEdits });
       setEditingEntry(null);
       setEditForm(null);
       setSaveStatus('success');
@@ -1109,7 +1017,7 @@ export default function GymTracker() {
 
     if (
       (bulkEditFields.user && !editForm.user.trim())
-      || (bulkEditFields.date && !editForm.date.trim())
+      || (bulkEditFields.date && !isValidTrainingDate(editForm.date))
       || (bulkEditFields.exercise && !editForm.exercise.trim())
       || (bulkEditFields.sets && (!Number.isFinite(sets) || sets <= 0))
       || (bulkEditFields.reps && (!Number.isFinite(reps) || reps <= 0))
@@ -1140,8 +1048,7 @@ export default function GymTracker() {
         nextEntryEdits[entry.id] = nextEdit;
       });
 
-      await persistPayload(trainingText, aliases, nextEntryEdits);
-      setEntryEdits(nextEntryEdits);
+      await session.save({ entryEdits: nextEntryEdits });
       setBulkEditingEntries([]);
       setEditForm(null);
       setBulkEditFields(getEmptyBulkEditFields());
@@ -1153,7 +1060,7 @@ export default function GymTracker() {
     }
   };
 
-  if (!isUnlocked || !parsedData) {
+  if (!session || !parsedData) {
     return (
       <AuthScreen
         hasVault={hasVault}
@@ -1184,7 +1091,7 @@ export default function GymTracker() {
         }}
         onAccountSubmit={handleRemoteAccountSubmit}
         onAccountSignOut={handleRemoteSignOut}
-        onVaultIdChange={setVaultId}
+        onVaultIdChange={(id) => { stagedBackup.current = null; setVaultId(id); }}
         onPasswordChange={setPassword}
         onRememberDeviceChange={setRememberDevice}
         onSubmit={handleUnlock}
@@ -1201,7 +1108,7 @@ export default function GymTracker() {
       <main className="relative mx-auto mt-4 w-full max-w-6xl flex-1 space-y-6 p-4">
         <TabNav activeTab={activeTab} onTabChange={(tab) => { setActiveTab(tab); if (tab === 'records') { setRecordsFocus(null); setRecordsOrigin(null); } }} />
 
-        {conflictRef.current && <div role="alert" className="rounded-xl border border-amber-500/40 bg-amber-500/10 p-4 space-y-3"><p className="text-sm text-amber-200">Hay dos versiones de tus datos. Conservamos tus cambios locales cifrados y hemos detenido la edición para evitar sobrescribir la versión guardada.</p><button type="button" onClick={async () => { await exportVault(); await discardPendingVault(vaultId); await lockApp(); }} className="rounded-xl bg-slate-800 px-4 py-3 text-sm font-bold">Descargar mis cambios y volver a abrir</button></div>}
+        {session?.conflict && <div role="alert" className="rounded-xl border border-amber-500/40 bg-amber-500/10 p-4 space-y-3"><p className="text-sm text-amber-200">Hay dos versiones de tus datos. Conservamos tus cambios locales cifrados y hemos detenido la edición para evitar sobrescribir la versión guardada.</p><button type="button" onClick={async () => { await exportVault(); await discardPendingVault(vaultId); await lockApp(); }} className="rounded-xl bg-slate-800 px-4 py-3 text-sm font-bold">Descargar mis cambios y volver a abrir</button></div>}
 
         {activeTab === 'today' && (
           <TodayTab
@@ -1255,8 +1162,7 @@ export default function GymTracker() {
             />
           ) : completedWorkout ? (
             <section className="rounded-3xl p-6 bg-slate-900 border border-emerald-500/30 space-y-4"><p className="text-emerald-300 font-bold">Entrenamiento guardado</p><h2 className="text-2xl font-black">{completedWorkout.sessionName}</h2><p className="text-slate-300">{completedWorkout.completedEntries.reduce((sum, entry) => sum + entry.sets, 0)} series · {new Set(completedWorkout.completedEntries.map((entry) => entry.exercise)).size} ejercicios</p><div className="flex flex-wrap gap-3"><button type="button" onClick={() => {
-              const [year, month, day] = completedWorkout.date.split('-');
-              openRecordsWorkout({ user: completedWorkout.user, date: `${day}/${month}/${year}`, dayLabel: completedWorkout.sessionName });
+              openRecordsWorkout({ user: completedWorkout.user, date: inputToDisplayDate(completedWorkout.date), dayLabel: completedWorkout.sessionName });
             }} className="px-4 py-3 rounded-xl bg-emerald-500 text-slate-950 font-bold">Ver detalle</button><button type="button" onClick={() => { handleUserChange(completedWorkout.user); setActiveTab('progress'); }} className="px-4 py-3 rounded-xl bg-slate-800 font-bold">Ver progreso</button><button type="button" onClick={() => setActiveTab('today')} className="px-4 py-3 text-slate-300">Volver a Hoy</button></div></section>
           ) : (
             <TrainingInputPanel
@@ -1430,7 +1336,7 @@ export default function GymTracker() {
       </main>
       {confirmation && <ConfirmationDialog title={confirmation.title} description={confirmation.description} confirmLabel={confirmation.confirmLabel} onDismiss={() => closeConfirmation(false)} onConfirm={() => closeConfirmation(true)} />}
       <footer className="mx-auto w-full max-w-6xl px-4 pb-2">
-        {isUnlocked && <div className="flex items-center justify-between gap-3 text-xs text-slate-400" role="status" aria-live="polite"><span>{saveStatus === 'error' ? 'Pendiente de sincronizar · revisa el aviso' : draftSignature !== savedDraftRef.current ? 'Guardando cambios…' : 'Guardado en este dispositivo' + (isRemoteStorage ? ' y sincronizado' : '')}</span>{saveStatus === 'error' && <button type="button" onClick={() => setRetrySave((value) => value + 1)} className="text-emerald-300 font-bold">Reintentar</button>}</div>}
+        <div className="flex items-center justify-between gap-3 text-xs text-slate-400" role="status" aria-live="polite"><span>{saveStatus === 'error' ? 'Pendiente de sincronizar · revisa el aviso' : session?.isDirty({ activeWorkout, uiDrafts }) ? 'Guardando cambios…' : 'Guardado en este dispositivo' + (isRemoteStorage ? ' y sincronizado' : '')}</span>{saveStatus === 'error' && <button type="button" onClick={retry} className="text-emerald-300 font-bold">Reintentar</button>}</div>
       </footer>
     </div>
   );
@@ -1474,26 +1380,18 @@ function getEditableTrainingEntries(processedData) {
     .sort((a, b) => parseTrainingDate(b.date) - parseTrainingDate(a.date));
 }
 
-function parseTrainingDate(date) {
-  const [day, month, year] = date.split(/[/.-]/).map(Number);
-  const fullYear = year < 100 ? 2000 + year : year;
-  return new Date(fullYear, month - 1, day);
-}
-
 function getRememberedKeyId(vaultId, remoteUserId) {
   return remoteUserId ? `${remoteUserId}:${vaultId}` : vaultId;
 }
 
 function buildManualWorkoutText({ user, date, dayLabel, entries, routineId, sessionId }) {
-  const [year, month, day] = date.split('-');
-  const chatDate = `${day}/${month}/${year}`;
+  const chatDate = inputToDisplayDate(date);
   const timestamp = '12:00';
   const prefix = `[${chatDate}, ${timestamp}] ${user}:`;
   const lines = [`${prefix} ### ${dayLabel || 'Entrenamiento manual'} ###`];
   if (routineId && sessionId) {
     lines.push(`${prefix} ${workoutSessionPrefix} ${JSON.stringify({ routineId, sessionId })}`);
   }
-
 
   entries.forEach((entry) => {
     lines.push(`${prefix} GYM_TRACKER_EXERCISE: ${entry.exercise}`);

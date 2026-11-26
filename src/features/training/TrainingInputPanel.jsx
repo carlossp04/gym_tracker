@@ -1,3 +1,4 @@
+import { todayInputValue } from '../../lib/trainingDates.js';
 import { useState } from 'react';
 import { ArrowLeft, CalendarDays, CheckCircle2, ClipboardPaste, Copy, Dumbbell, LayoutTemplate, Play, Plus, Save, Trash2, XCircle } from 'lucide-react';
 import TrainingProfilePicker from './TrainingProfilePicker';
@@ -22,7 +23,7 @@ export default function TrainingInputPanel({
   drafts, onDraftChange, profile: user, importPreview, onCreateRoutine, onUserChange, onCreateProfile,
 }) {
   const [inputMode, setInputMode] = useDraftField(drafts, onDraftChange, 'inputMode', () => routines.length > 0 ? TEMPLATE_MODE : MANUAL_MODE);
-  const [date, setDate] = useDraftField(drafts, onDraftChange, 'manualDate', getTodayInputValue);
+  const [date, setDate] = useDraftField(drafts, onDraftChange, 'manualDate', todayInputValue);
   const [dayLabel, setDayLabel] = useDraftField(drafts, onDraftChange, 'manualName', 'Entrenamiento manual');
   const [exercise, setExercise] = useDraftField(drafts, onDraftChange, 'manualExercise', '');
   const [sets, setSets] = useDraftField(drafts, onDraftChange, 'manualSets', '3');
@@ -299,11 +300,6 @@ function SaveFeedback({ status, message }) {
       : { icon: Save, className: 'text-blue-400' };
   const Icon = config.icon;
   return <p className={`text-sm flex items-center gap-2 ${config.className}`}><Icon size={16} /> {message || 'Guardando cifrado...'}</p>;
-}
-
-function getTodayInputValue() {
-  const today = new Date();
-  return `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
 }
 
 const inputClasses = 'w-full h-[46px] bg-slate-950 border border-slate-700 rounded-xl px-3 text-sm text-white placeholder:text-slate-600 focus:outline-none focus:border-emerald-500/60';

@@ -1,3 +1,4 @@
+import { parseTrainingDate, parseDateInput, formatDateInput } from '../../lib/trainingDates.js';
 import { Fragment, useMemo, useState } from 'react';
 import { CalendarDays, ChevronDown, FilterX, ListX, Pencil, Search, SquarePen, Trash2, X } from 'lucide-react';
 import { normalizeSearchText } from '../../lib/textSearch';
@@ -506,23 +507,6 @@ function WorkoutActions({ entries, isSaving, onRepeat, onSaveAsRoutine }) {
   return <div className="flex flex-wrap gap-2"><button type="button" disabled={isSaving} onClick={() => onRepeat(entries)} className="rounded-lg bg-slate-800 px-3 py-2 text-xs font-bold text-slate-200 disabled:opacity-40">Repetir hoy</button><button type="button" disabled={isSaving} onClick={() => onSaveAsRoutine(entries)} className="rounded-lg bg-slate-800 px-3 py-2 text-xs font-bold text-slate-200 disabled:opacity-40">Guardar como rutina</button></div>;
 }
 
-function parseTrainingDate(date) {
-  const [day, month, year] = date.split(/[/.-]/).map(Number);
-  const fullYear = year < 100 ? 2000 + year : year;
-  return new Date(fullYear, month - 1, day);
-}
-
-function parseDateInput(date) {
-  const [year, month, day] = date.split('-').map(Number);
-  return new Date(year, month - 1, day);
-}
-
-function formatDateInput(date) {
-  const [day, month, year] = date.split(/[/.-]/).map(Number);
-  const fullYear = year < 100 ? 2000 + year : year;
-  return `${fullYear}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
-}
-
 function getInitialFilters(focusedWorkout) {
   if (!focusedWorkout) {
     return {
@@ -534,7 +518,7 @@ function getInitialFilters(focusedWorkout) {
     };
   }
 
-  const inputDate = formatDateInput(focusedWorkout.date);
+  const inputDate = formatDateInput(parseTrainingDate(focusedWorkout.date));
 
   return {
     search: '',

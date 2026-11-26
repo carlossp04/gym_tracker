@@ -1,3 +1,4 @@
+import { isValidTrainingDate } from '../../lib/trainingDates';
 import { Save, XCircle } from 'lucide-react';
 import { estimateOneRepMax } from '../../lib/gymMetrics';
 
@@ -15,6 +16,8 @@ export default function TrainingEditModal({
 }) {
   const oneRepMax = estimateOneRepMax(editForm.weight, editForm.reps);
   const isBulk = mode === 'bulk';
+
+  const invalidDate = (!isBulk || enabledFields?.date) && !isValidTrainingDate(editForm.date);
 
   const updateField = (field, value) => {
     onEditFormChange((current) => ({ ...current, [field]: value }));
@@ -62,12 +65,14 @@ export default function TrainingEditModal({
           >
             <input
               type="text"
+              aria-invalid={Boolean(invalidDate)}
               value={editForm.date}
               onChange={(event) => updateField('date', event.target.value)}
               className={inputClasses}
               placeholder="dd/mm/aa"
               disabled={isBulk && !enabledFields?.date}
             />
+            {invalidDate && <span className="text-sm text-red-300">Introduce una fecha válida, por ejemplo 31/12/2026.</span>}
           </Field>
           <Field
             label="Día / bloque"
@@ -158,7 +163,7 @@ export default function TrainingEditModal({
 
         <div className="sticky bottom-0 -mx-4 sm:-mx-6 px-4 sm:px-6 pt-4 pb-1 bg-slate-900 flex flex-col sm:flex-row gap-3 mt-4 sm:mt-6">
           <button onClick={onCancel} className="flex-1 py-3 rounded-xl font-bold text-slate-400 hover:bg-slate-800 transition-colors">Cancelar</button>
-          <button onClick={onConfirm} className="flex-1 py-3 rounded-xl font-bold bg-emerald-500 hover:bg-emerald-400 text-slate-950 shadow-lg shadow-emerald-900/20 transition-colors">
+          <button disabled={invalidDate} onClick={onConfirm} className="flex-1 py-3 rounded-xl font-bold bg-emerald-500 hover:bg-emerald-400 text-slate-950 shadow-lg shadow-emerald-900/20 transition-colors">
             {isBulk ? 'Guardar cambios masivos' : 'Guardar corrección'}
           </button>
         </div>

@@ -1,12 +1,15 @@
+import { todayInputValue, formatDateInput, parseTrainingDate } from './trainingDates.js';
 import { normalizeChatText, parseWhatsAppChat } from './whatsappParser.js';
+
+export { todayInputValue };
 
 export function inspectTrainingImport(text, existingData = {}) {
   const normalized = normalizeChatText(text).trim();
   const parsed = parseWhatsAppChat(normalized);
   const entries = Object.entries(parsed).flatMap(([user, rows]) => rows.map((row) => ({ ...row, user })));
   const signature = (entry) => {
-    const [day, month, year] = entry.date.split(/[/.-]/).map(Number);
-    return JSON.stringify([entry.user, `${year < 100 ? 2000 + year : year}-${month}-${day}`, entry.exercise.trim().toLocaleLowerCase('es'), entry.sets, entry.reps, entry.weight]);
+    const date = formatDateInput(parseTrainingDate(entry.date));
+    return JSON.stringify([entry.user, date, entry.exercise.trim().toLocaleLowerCase('es'), entry.sets, entry.reps, entry.weight]);
   };
   const existing = new Set(Object.entries(existingData || {}).flatMap(([user, rows]) => rows.map((row) => signature({ ...row, user }))));
   const seen = new Set();
@@ -20,11 +23,7 @@ export function inspectTrainingImport(text, existingData = {}) {
   return { entries, duplicates, unrecognized: Math.max(0, candidateLines.length - entries.length) };
 }
 
-export function todayInputValue() {
-  const date = new Date();
-  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
-}
-
+/** @returns {import('./vaultTypes.js').ActiveWorkout} */
 export function workoutFromEntries(entries, user, date = todayInputValue()) {
   const exercises = new Map();
   entries.forEach((entry) => {

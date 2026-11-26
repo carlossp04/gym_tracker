@@ -1,3 +1,4 @@
+import { parseTrainingDate, formatDisplayDate } from '../../lib/trainingDates.js';
 import { CalendarDays, ChevronLeft, ChevronRight, User, Users } from 'lucide-react';
 import { useMemo } from 'react';
 import useDraftField from '../../lib/useDraftField';
@@ -90,7 +91,7 @@ export default function CalendarTab({ processedData, availableUsers, userColors,
 
 function UserCalendar({ user, color, month, trainedDays, onOpenRecordsDay }) {
   const weeks = buildMonthGrid(month);
-  const trainedCount = weeks.flat().filter((day) => day.inMonth && trainedDays.has(toDateKey(day.date))).length;
+  const trainedCount = weeks.flat().filter((day) => day.inMonth && trainedDays.has(formatDisplayDate(day.date))).length;
 
   return (
     <section className="bg-slate-900 border border-slate-800 p-4 rounded-2xl shadow-xl">
@@ -115,7 +116,7 @@ function UserCalendar({ user, color, month, trainedDays, onOpenRecordsDay }) {
 
       <div className="grid grid-cols-7 gap-1.5 max-w-[25rem] mx-auto">
         {weeks.flat().map((day) => {
-          const dateKey = toDateKey(day.date);
+          const dateKey = formatDisplayDate(day.date);
           const trained = day.inMonth && trainedDays.has(dateKey);
 
           return (
@@ -147,7 +148,7 @@ function buildCalendarData(processedData) {
     trainedDaysByUser[user] = new Set();
     entries.forEach((entry) => {
       const date = parseTrainingDate(entry.date);
-      trainedDaysByUser[user].add(toDateKey(date));
+      trainedDaysByUser[user].add(formatDisplayDate(date));
       monthKeys.add(toMonthKey(date));
     });
   });
@@ -182,21 +183,9 @@ function buildMonthGrid(month) {
   }, []);
 }
 
-function parseTrainingDate(date) {
-  const [day, month, year] = date.split(/[/.-]/).map(Number);
-  const fullYear = year < 100 ? 2000 + year : year;
-  return new Date(fullYear, month - 1, day);
-}
-
 function parseMonthKey(monthKey) {
   const [year, month] = monthKey.split('-').map(Number);
   return new Date(year, month - 1, 1);
-}
-
-function toDateKey(date) {
-  const day = String(date.getDate()).padStart(2, '0');
-  const month = String(date.getMonth() + 1).padStart(2, '0');
-  return `${day}/${month}/${date.getFullYear()}`;
 }
 
 function toMonthKey(date) {
