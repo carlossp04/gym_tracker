@@ -3,7 +3,7 @@ import { ArrowDown, ArrowUp, LayoutTemplate, Pencil, Play, Plus, Save, Sparkles,
 import RoutineImportModal from './RoutineImportModal';
 import useDraftField from '../../lib/useDraftField';
 
-export default function RoutinesTab({ canEdit, routines, exerciseOptions, saveStatus, saveMessage, onSaveRoutines, drafts, onDraftChange, onStartSession, profile, onChooseProfile }) {
+export default function RoutinesTab({ canEdit, routines, exerciseOptions, saveStatus, saveMessage, onSaveRoutines, drafts, onDraftChange, onStartSession, profile, onChooseProfile, confirmDeletion }) {
   const [selectedRoutineId, setSelectedRoutineId] = useDraftField(drafts, onDraftChange, 'routineSelection', () => routines[0]?.id || '');
   const [selectedSessionId, setSelectedSessionId] = useDraftField(drafts, onDraftChange, 'sessionSelection', '');
   const [newRoutineName, setNewRoutineName] = useDraftField(drafts, onDraftChange, 'newRoutineName', '');
@@ -44,7 +44,7 @@ export default function RoutinesTab({ canEdit, routines, exerciseOptions, saveSt
   };
 
   const deleteRoutine = async () => {
-    if (!selectedRoutine || !window.confirm(`¿Eliminar la rutina "${selectedRoutine.name}"?`)) return;
+    if (!selectedRoutine || !await confirmDeletion({ title: `¿Eliminar «${selectedRoutine.name}»?`, description: 'Se eliminará la rutina con todas sus sesiones. Los entrenamientos guardados seguirán en el historial.', confirmLabel: 'Eliminar rutina' })) return;
     const nextRoutines = routines.filter((routine) => routine.id !== selectedRoutine.id);
     if (await onSaveRoutines(nextRoutines)) {
       setSelectedRoutineId(nextRoutines[0]?.id || '');
@@ -53,7 +53,7 @@ export default function RoutinesTab({ canEdit, routines, exerciseOptions, saveSt
   };
 
   const deleteSession = async () => {
-    if (!selectedRoutine || !selectedSession || !window.confirm(`¿Eliminar la sesión "${selectedSession.name}"?`)) return;
+    if (!selectedRoutine || !selectedSession || !await confirmDeletion({ title: `¿Eliminar «${selectedSession.name}»?`, description: 'Se quitará esta sesión de la rutina. Los entrenamientos guardados seguirán en el historial.', confirmLabel: 'Eliminar sesión' })) return;
     const nextRoutines = updateRoutine(routines, selectedRoutine.id, (routine) => ({
       ...routine,
       sessions: routine.sessions.filter((session) => session.id !== selectedSession.id),

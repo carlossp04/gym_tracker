@@ -1,3 +1,4 @@
+import ConfirmationDialog from './components/ConfirmationDialog';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { initialTrainingText, userColors } from './constants/appConstants';
 import AuthScreen from './features/auth/AuthScreen';
@@ -81,6 +82,7 @@ export default function GymTracker() {
   const [authError, setAuthError] = useState('');
   const [newTrainingText, setNewTrainingText] = useState('');
   const [saveStatus, setSaveStatus] = useState('idle');
+  const [confirmation, setConfirmation] = useState(null);
   const [saveMessage, setSaveMessage] = useState('');
   const revisionRef = useRef(null);
   const saveQueue = useRef(Promise.resolve());
@@ -971,9 +973,18 @@ export default function GymTracker() {
     setBulkEditFields((current) => ({ ...current, [field]: enabled }));
   };
 
+  const confirmDeletion = (options) => new Promise((resolve) => {
+    setConfirmation({ ...options, resolve });
+  });
+
+  const closeConfirmation = (confirmed) => {
+    confirmation.resolve(confirmed);
+    setConfirmation(null);
+  };
+
   const deleteTrainingEntries = async (entries, confirmMessage, successMessage) => {
     if (!canEdit || !entries.length) return;
-    if (!window.confirm(confirmMessage)) return;
+    if (!await confirmDeletion({ title: entries.length === 1 ? '¿Eliminar este registro?' : '¿Eliminar estos registros?', description: confirmMessage, confirmLabel: 'Eliminar' })) return;
 
     try {
       setSaveStatus('saving');
@@ -1001,7 +1012,7 @@ export default function GymTracker() {
   const deleteTrainingEntry = (entry) => {
     deleteTrainingEntries(
       [entry],
-      `Eliminar este registro de ${entry.exercise} (${entry.date})?`,
+      `Se eliminará el registro de ${entry.exercise} del ${entry.date}.`,
       'Registro eliminado y vault cifrado actualizado.',
     );
   };
@@ -1012,7 +1023,7 @@ export default function GymTracker() {
 
     deleteTrainingEntries(
       entries,
-      `Eliminar ${entries.length} registro(s) de ${firstEntry.exercise} en ${firstEntry.date}?`,
+      `Se eliminarán los registros seleccionados de ${firstEntry.exercise} del ${firstEntry.date}.`,
       'Ejercicio eliminado del día y vault cifrado actualizado.',
     );
   };
@@ -1020,7 +1031,7 @@ export default function GymTracker() {
   const deleteSelectedTrainingEntries = (entries) => {
     deleteTrainingEntries(
       entries,
-      `Eliminar ${entries.length} registro(s) seleccionado(s)?`,
+      `Se eliminará la selección del historial (${entries.length}).`,
       `${entries.length} registro(s) eliminado(s) y vault cifrado actualizado.`,
     );
   };
@@ -1240,6 +1251,7 @@ export default function GymTracker() {
               onSaveProgress={saveActiveWorkout}
               onFinish={finishActiveWorkout}
               onCancel={cancelActiveWorkout}
+              confirmDeletion={confirmDeletion}
             />
           ) : completedWorkout ? (
             <section className="rounded-3xl p-6 bg-slate-900 border border-emerald-500/30 space-y-4"><p className="text-emerald-300 font-bold">Entrenamiento guardado</p><h2 className="text-2xl font-black">{completedWorkout.sessionName}</h2><p className="text-slate-300">{completedWorkout.completedEntries.reduce((sum, entry) => sum + entry.sets, 0)} series · {new Set(completedWorkout.completedEntries.map((entry) => entry.exercise)).size} ejercicios</p><div className="flex flex-wrap gap-3"><button type="button" onClick={() => {
@@ -1278,6 +1290,7 @@ export default function GymTracker() {
             onDraftChange={changeDraft}
             onStartSession={(routineId, sessionId, sessionOverride) => startTemplateWorkout({ routineId, sessionId, sessionOverride, user: uiDrafts.profile ?? (selectedUser === ALL_USERS_OPTION ? '' : selectedUser), date: todayInputValue() })}
             onChooseProfile={() => setActiveTab('today')}
+            confirmDeletion={confirmDeletion}
             profile={uiDrafts.profile ?? (selectedUser === ALL_USERS_OPTION ? '' : selectedUser)}
             canEdit={canEdit}
             routines={routines}
@@ -1415,6 +1428,7 @@ export default function GymTracker() {
         )}
 
       </main>
+      {confirmation && <ConfirmationDialog title={confirmation.title} description={confirmation.description} confirmLabel={confirmation.confirmLabel} onDismiss={() => closeConfirmation(false)} onConfirm={() => closeConfirmation(true)} />}
       <footer className="mx-auto w-full max-w-6xl px-4 pb-2">
         {isUnlocked && <div className="flex items-center justify-between gap-3 text-xs text-slate-400" role="status" aria-live="polite"><span>{saveStatus === 'error' ? 'Pendiente de sincronizar · revisa el aviso' : draftSignature !== savedDraftRef.current ? 'Guardando cambios…' : 'Guardado en este dispositivo' + (isRemoteStorage ? ' y sincronizado' : '')}</span>{saveStatus === 'error' && <button type="button" onClick={() => setRetrySave((value) => value + 1)} className="text-emerald-300 font-bold">Reintentar</button>}</div>}
       </footer>

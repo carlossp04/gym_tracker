@@ -1,11 +1,12 @@
 import { Check, ChevronDown, CircleStop, Dumbbell, Pause, Pencil, Play, Plus, Save, Settings2, SkipForward, Timer, Trash2, X } from 'lucide-react';
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useState } from 'react';
+import ConfirmationDialog from '../../components/ConfirmationDialog';
 import { canCompleteSet, isValidSetReps, moreWeightReminderKey } from '../../lib/workoutFlow';
 
-export default function ActiveWorkoutPanel({ workout, moreWeightReminders, restSeconds, onRestSecondsChange, saveStatus, saveMessage, onWorkoutChange, onSaveProgress, onFinish, onCancel }) {
+export default function ActiveWorkoutPanel({ workout, moreWeightReminders, restSeconds, onRestSecondsChange, saveStatus, saveMessage, onWorkoutChange, onSaveProgress, onFinish, onCancel, confirmDeletion }) {
   const [showFinish, setShowFinish] = useState(false);
   const [isDiscarding, setIsDiscarding] = useState(false);
-  const discardDialog = useRef(null);
+  const [showDiscard, setShowDiscard] = useState(false);
   const allSets = workout.exercises.flatMap((exercise) => exercise.sets);
   const completedSets = allSets.filter((set) => set.completed).length;
   const completion = allSets.length > 0 ? Math.round((completedSets / allSets.length) * 100) : 0;
@@ -40,16 +41,16 @@ export default function ActiveWorkoutPanel({ workout, moreWeightReminders, restS
     });
   };
 
-  const removeExercise = (exerciseId) => {
-    if (!window.confirm('¿Omitir este ejercicio del entrenamiento actual?')) return;
-    onWorkoutChange({ ...workout, exercises: workout.exercises.filter((exercise) => exercise.id !== exerciseId) });
+  const removeExercise = async (exercise) => {
+    if (!await confirmDeletion({ title: `¿Omitir «${exercise.exercise}»?`, description: 'Se quitará el ejercicio y sus series de esta sesión.', confirmLabel: 'Omitir ejercicio' })) return;
+    onWorkoutChange({ ...workout, exercises: workout.exercises.filter((item) => item.id !== exercise.id) });
   };
 
   const confirmDiscard = async () => {
     if (isDiscarding || saveStatus === 'saving') return;
     setIsDiscarding(true);
     try {
-      if (await onCancel()) discardDialog.current?.close();
+      if (await onCancel()) setShowDiscard(false);
     } finally {
       setIsDiscarding(false);
     }
@@ -80,7 +81,7 @@ export default function ActiveWorkoutPanel({ workout, moreWeightReminders, restS
                 reminderWeight={moreWeightReminders[reminderKey]}
                 onUpdateSet={(setId, patch, completedAt) => updateSet(exercise.id, setId, patch, completedAt)}
                 onUpdateExercise={(updater) => updateExercise(exercise.id, updater)}
-                onRemove={() => removeExercise(exercise.id)}
+                onRemove={() => removeExercise(exercise)}
               />
             );
           })}
@@ -88,27 +89,23 @@ export default function ActiveWorkoutPanel({ workout, moreWeightReminders, restS
         </div>
       </section>
 
-      <button type="button" onClick={() => discardDialog.current.showModal()} disabled={saveStatus === 'saving'} className="flex min-h-12 w-full items-center justify-center gap-2 rounded-xl bg-red-700 px-4 py-3 font-bold text-white hover:bg-red-600 disabled:opacity-50">
+      <button type="button" onClick={() => setShowDiscard(true)} disabled={saveStatus === 'saving'} className="flex min-h-12 w-full items-center justify-center gap-2 rounded-xl bg-red-700 px-4 py-3 font-bold text-white hover:bg-red-600 disabled:opacity-50">
         <Trash2 size={18} /> Descartar sesión
       </button>
 
-      <dialog
-        ref={discardDialog}
-        aria-labelledby="discard-title"
-        aria-describedby="discard-description"
-        onCancel={(event) => { if (isDiscarding) event.preventDefault(); }}
-        className="m-auto w-[calc(100%-2rem)] max-w-md space-y-4 rounded-3xl border border-slate-700 bg-slate-900 p-5 text-slate-100 shadow-2xl backdrop:bg-black/80 sm:p-6"
-      >
-        <h2 id="discard-title" className="text-xl font-black">¿Descartar esta sesión?</h2>
-        <p id="discard-description" className="text-sm text-slate-300">Se eliminará la sesión en curso y se perderán todas sus series.</p>
-        {saveStatus === 'error' && <p role="alert" className="text-sm text-red-300">{saveMessage}</p>}
-        <div className="grid grid-cols-2 gap-2">
-          <button type="button" onClick={() => discardDialog.current.close()} disabled={isDiscarding} className="min-h-11 rounded-xl bg-slate-800 px-2 py-2 text-sm font-bold hover:bg-slate-700 disabled:opacity-50">Seguir entrenando</button>
-          <button type="button" onClick={confirmDiscard} disabled={isDiscarding || saveStatus === 'saving'} className="min-h-11 rounded-xl bg-red-700 px-2 py-2 text-sm font-bold text-white hover:bg-red-600 disabled:opacity-50">
-            {isDiscarding ? 'Descartando…' : 'Descartar sesión'}
-          </button>
-        </div>
-      </dialog>
+      {showDiscard && (
+        <ConfirmationDialog
+          title="¿Descartar esta sesión?"
+          description="Se eliminará la sesión en curso y se perderán todas sus series."
+          cancelLabel="Seguir entrenando"
+          confirmLabel={isDiscarding ? 'Descartando…' : 'Descartar sesión'}
+          onDismiss={() => setShowDiscard(false)}
+          onConfirm={confirmDiscard}
+          busy={isDiscarding}
+          confirmDisabled={saveStatus === 'saving'}
+          error={saveStatus === 'error' ? saveMessage : undefined}
+        />
+      )}
 
       {saveMessage && <p className={`text-sm rounded-xl border p-3 ${saveStatus === 'error' ? 'text-red-300 bg-red-500/10 border-red-500/30' : 'text-emerald-300 bg-emerald-500/10 border-emerald-500/30'}`}>{saveMessage}</p>}
 
@@ -129,7 +126,8 @@ export default function ActiveWorkoutPanel({ workout, moreWeightReminders, restS
   );
 }
 
-const restPresets = [[0, 'Desactivado'], [30, '30 s'], [60, '1 min'], [90, '1 min 30 s'], [120, '2 min'], [180, '3 min']];
+const restPresets = [[30, '30 s'], [60, '1 min'], [90, '1:30'], [120, '2 min'], [180, '3 min']];
+const restOptionClasses = 'min-h-11 rounded-lg border border-slate-700 bg-slate-900 px-1 text-xs font-bold text-slate-200 hover:bg-slate-800 aria-pressed:border-emerald-500/40 aria-pressed:bg-emerald-500/15 aria-pressed:text-emerald-200';
 const restInputClasses = 'min-h-11 w-full min-w-0 rounded-lg border border-slate-700 bg-slate-900 px-2 text-slate-100';
 
 function formatRestTime(seconds) {
@@ -137,7 +135,7 @@ function formatRestTime(seconds) {
 }
 
 function RestSettings({ restSeconds, onRestSecondsChange, hasTimer, iconOnly }) {
-  const [isCustomRest, setIsCustomRest] = useState(() => !restPresets.some(([seconds]) => seconds === restSeconds));
+  const [isCustomRest, setIsCustomRest] = useState(() => restSeconds > 0 && !restPresets.some(([seconds]) => seconds === restSeconds));
   const compact = hasTimer || iconOnly;
   const RestIcon = hasTimer ? Settings2 : Timer;
 
@@ -160,17 +158,21 @@ function RestSettings({ restSeconds, onRestSecondsChange, hasTimer, iconOnly }) 
       </summary>
       <div className="absolute bottom-full right-0 z-10 mb-2 max-h-[45dvh] w-56 overflow-y-auto rounded-xl border border-slate-700 bg-slate-950 p-1 shadow-lg">
         <p className="px-3 pt-2 text-xs text-slate-400">Se aplica al marcar la próxima serie.</p>
-        <label className="grid gap-1 px-3 py-2 text-sm font-bold text-slate-300">
-          Descanso automático
-          <select value={isCustomRest ? 'custom' : restSeconds} onChange={(event) => {
-            const value = event.target.value;
-            setIsCustomRest(value === 'custom');
-            if (value !== 'custom') onRestSecondsChange(Number(value));
-          }} className="min-h-11 rounded-lg border border-slate-700 bg-slate-900 px-2 text-slate-100">
-            {restPresets.map(([seconds, label]) => <option key={seconds} value={seconds}>{label}</option>)}
-            <option value="custom">Personalizado</option>
-          </select>
-        </label>
+        <div role="group" aria-label="Duración del descanso automático" className="grid grid-cols-3 gap-1.5 px-3 py-2">
+          {restPresets.map(([seconds, label]) => (
+            <button key={seconds} type="button" aria-pressed={!isCustomRest && restSeconds === seconds} onClick={(event) => {
+              setIsCustomRest(false);
+              onRestSecondsChange(seconds);
+              event.currentTarget.closest('details').open = false;
+            }} className={restOptionClasses}>{label}</button>
+          ))}
+          <button type="button" aria-pressed={!isCustomRest && restSeconds === 0} onClick={(event) => {
+            setIsCustomRest(false);
+            onRestSecondsChange(0);
+            event.currentTarget.closest('details').open = false;
+          }} className={restOptionClasses}>Apagar</button>
+          <button type="button" aria-expanded={isCustomRest} onClick={() => setIsCustomRest((open) => !open)} className={`col-span-3 ${restOptionClasses}`}>Personalizado</button>
+        </div>
         {isCustomRest && (
           <form onSubmit={saveCustomRest} className="grid grid-cols-2 gap-2 px-3 pb-2 text-sm text-slate-300">
             <label className="grid gap-1">
