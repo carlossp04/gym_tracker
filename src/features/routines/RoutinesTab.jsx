@@ -1,14 +1,16 @@
 import { useState } from 'react';
-import { ArrowDown, ArrowUp, LayoutTemplate, Plus, Save, Sparkles, Trash2 } from 'lucide-react';
+import { ArrowDown, ArrowUp, LayoutTemplate, Pencil, Play, Plus, Save, Sparkles, Trash2 } from 'lucide-react';
 import RoutineImportModal from './RoutineImportModal';
 import useDraftField from '../../lib/useDraftField';
 
-export default function RoutinesTab({ canEdit, routines, exerciseOptions, saveStatus, saveMessage, onSaveRoutines, drafts, onDraftChange, onStartSession, profile }) {
+export default function RoutinesTab({ canEdit, routines, exerciseOptions, saveStatus, saveMessage, onSaveRoutines, drafts, onDraftChange, onStartSession, profile, onChooseProfile }) {
   const [selectedRoutineId, setSelectedRoutineId] = useDraftField(drafts, onDraftChange, 'routineSelection', () => routines[0]?.id || '');
   const [selectedSessionId, setSelectedSessionId] = useDraftField(drafts, onDraftChange, 'sessionSelection', '');
   const [newRoutineName, setNewRoutineName] = useDraftField(drafts, onDraftChange, 'newRoutineName', '');
   const [newSessionName, setNewSessionName] = useDraftField(drafts, onDraftChange, 'newSessionName', '');
   const [showImportModal, setShowImportModal] = useState(false);
+  const [isEditing, setIsEditing] = useState(false);
+  const [showCreateRoutine, setShowCreateRoutine] = useState(false);
   const selectedRoutine = routines.find((routine) => routine.id === selectedRoutineId) || routines[0] || null;
   const selectedSession = selectedRoutine?.sessions.find((session) => session.id === selectedSessionId)
     || selectedRoutine?.sessions[0]
@@ -22,6 +24,8 @@ export default function RoutinesTab({ canEdit, routines, exerciseOptions, saveSt
       setSelectedRoutineId(routine.id);
       setSelectedSessionId('');
       setNewRoutineName('');
+      setShowCreateRoutine(false);
+      setIsEditing(true);
     }
   };
 
@@ -70,30 +74,17 @@ export default function RoutinesTab({ canEdit, routines, exerciseOptions, saveSt
 
   return (
     <div className="space-y-6 animate-in fade-in slide-in-from-right-4 duration-500">
-      <header className="text-center space-y-2">
-        <h2 className="text-2xl font-black text-white flex items-center justify-center gap-3"><LayoutTemplate className="text-fuchsia-400" size={30} /> Rutinas y plantillas</h2>
-        <p className="text-sm text-slate-400">Organiza una rutina en sesiones y define las series y repeticiones objetivo.</p>
-      </header>
-
-      <div className="flex justify-center">
-        <button type="button" onClick={() => setShowImportModal(true)} className="px-5 py-3 bg-fuchsia-500/10 hover:bg-fuchsia-500/20 border border-fuchsia-500/30 text-fuchsia-200 rounded-xl font-black flex items-center gap-2"><Sparkles size={18} /> Importar rutina con IA</button>
-      </div>
-
-      {saveStatus === 'success' && saveMessage && <p className="max-w-2xl mx-auto text-sm text-emerald-300 bg-emerald-500/10 border border-emerald-500/30 rounded-xl p-3">{saveMessage}</p>}
-
-      <form onSubmit={createRoutine} className="max-w-2xl mx-auto flex flex-col sm:flex-row gap-2 bg-slate-900 border border-slate-800 rounded-2xl p-4">
-        <input value={newRoutineName} onChange={(event) => setNewRoutineName(event.target.value)} placeholder="Nueva rutina, por ejemplo Torso/Pierna" className={`${inputClasses} flex-1`} />
-        <button disabled={!newRoutineName.trim() || saveStatus === 'saving'} className={primaryButtonClasses}><Plus size={17} /> Crear rutina</button>
-      </form>
+      <h2 className="text-2xl font-black text-white">Rutinas</h2>
+      {saveStatus === 'success' && saveMessage && <p className="text-sm text-emerald-300">{saveMessage}</p>}
 
       {routines.length === 0 ? (
-        <div className="border border-dashed border-slate-700 rounded-3xl p-10 text-center text-slate-500"><LayoutTemplate size={42} className="mx-auto mb-3 opacity-40" /><p className="font-bold">Crea tu primera rutina para empezar.</p></div>
+        <div className="border border-dashed border-slate-700 rounded-3xl p-10 text-center text-slate-500"><LayoutTemplate size={42} className="mx-auto mb-3 opacity-40" /><p className="font-bold">Crea o importa una rutina para empezar.</p></div>
       ) : (
         <div className="grid lg:grid-cols-[18rem_1fr] gap-5 items-start">
           <aside className="bg-slate-900 border border-slate-800 rounded-2xl p-3 space-y-2">
             <p className="px-2 pb-1 text-[10px] font-black uppercase tracking-wider text-slate-500">Rutinas</p>
             {routines.map((routine) => (
-              <button key={routine.id} type="button" onClick={() => { setSelectedRoutineId(routine.id); setSelectedSessionId(''); }} className={`w-full text-left rounded-xl px-3 py-3 ${routine.id === selectedRoutine?.id ? 'bg-fuchsia-500 text-white' : 'bg-slate-950 text-slate-300 hover:bg-slate-800'}`}>
+              <button key={routine.id} type="button" onClick={() => { setSelectedRoutineId(routine.id); setSelectedSessionId(''); setIsEditing(false); }} className={`w-full text-left rounded-xl px-3 py-3 ${routine.id === selectedRoutine?.id ? 'bg-fuchsia-500 text-white' : 'bg-slate-950 text-slate-300 hover:bg-slate-800'}`}>
                 <span className="block font-black truncate">{routine.name}</span><span className={`text-xs ${routine.id === selectedRoutine?.id ? 'text-fuchsia-100' : 'text-slate-600'}`}>{routine.sessions.length} sesiones</span>
               </button>
             ))}
@@ -101,27 +92,60 @@ export default function RoutinesTab({ canEdit, routines, exerciseOptions, saveSt
 
           {selectedRoutine && (
             <section className="bg-slate-900 border border-slate-800 rounded-3xl overflow-hidden">
-              <RoutineHeader key={selectedRoutine.id} drafts={drafts} onDraftChange={onDraftChange} routine={selectedRoutine} routines={routines} isSaving={saveStatus === 'saving'} onSaveRoutines={onSaveRoutines} onDelete={deleteRoutine} />
+              <header className="flex items-center justify-between gap-3 px-4 pt-4 sm:px-5">
+                <h3 className="min-w-0 break-words text-lg font-black text-white">{selectedRoutine.name}</h3>
+                <button type="button" onClick={() => setIsEditing((editing) => !editing)} className={secondaryButtonClasses}>
+                  {isEditing ? 'Cerrar edición' : <><Pencil size={16} /> Editar rutina</>}
+                </button>
+              </header>
+              {isEditing && <RoutineHeader key={selectedRoutine.id} drafts={drafts} onDraftChange={onDraftChange} routine={selectedRoutine} routines={routines} isSaving={saveStatus === 'saving'} onSaveRoutines={onSaveRoutines} onDelete={deleteRoutine} />}
 
               <div className="p-5 border-b border-slate-800 space-y-3">
                 <div className="flex gap-2 overflow-x-auto pb-1">
                   {selectedRoutine.sessions.map((session) => (
-                    <button key={session.id} type="button" onClick={() => setSelectedSessionId(session.id)} className={`shrink-0 px-4 py-2 rounded-xl text-sm font-bold ${session.id === selectedSession?.id ? 'bg-emerald-500 text-slate-950' : 'bg-slate-950 text-slate-400'}`}>{session.name}</button>
+                    <button key={session.id} type="button" onClick={() => setSelectedSessionId(session.id)} aria-pressed={session.id === selectedSession?.id} className={`min-h-11 shrink-0 px-4 py-2 rounded-xl text-sm font-bold ${session.id === selectedSession?.id ? 'bg-emerald-500 text-slate-950' : 'bg-slate-950 text-slate-400'}`}>{session.name}</button>
                   ))}
                 </div>
-                <form onSubmit={createSession} className="flex flex-col sm:flex-row gap-2">
-                  <input value={newSessionName} onChange={(event) => setNewSessionName(event.target.value)} placeholder="Nueva sesión, por ejemplo Tren superior A" className={`${inputClasses} flex-1`} />
-                  <button disabled={!newSessionName.trim() || saveStatus === 'saving'} className={secondaryButtonClasses}><Plus size={17} /> Añadir sesión</button>
-                </form>
+                {isEditing && (
+                  <form onSubmit={createSession} className="flex flex-col sm:flex-row gap-2">
+                    <input value={newSessionName} onChange={(event) => setNewSessionName(event.target.value)} placeholder="Nueva sesión, por ejemplo Tren superior A" className={`${inputClasses} flex-1`} />
+                    <button disabled={!newSessionName.trim() || saveStatus === 'saving'} className={secondaryButtonClasses}><Plus size={17} /> Añadir sesión</button>
+                  </form>
+                )}
               </div>
 
-              {selectedSession ? (
+              {!selectedSession ? (
+                <p className="p-5 text-sm text-slate-400">{isEditing ? 'Añade una sesión a esta rutina.' : 'Edita la rutina para añadir su primera sesión.'}</p>
+              ) : isEditing ? (
                 <SessionEditor key={selectedSession.id} drafts={drafts} onDraftChange={onDraftChange} profile={profile} onStartSession={onStartSession} routine={selectedRoutine} session={selectedSession} routines={routines} exerciseOptions={exerciseOptions} isSaving={saveStatus === 'saving'} onSaveRoutines={onSaveRoutines} onDelete={deleteSession} />
-              ) : <p className="p-8 text-center text-slate-500">Añade una sesión a esta rutina.</p>}
+              ) : (
+                <div className="space-y-4 p-4 sm:p-5">
+                  <div className="flex flex-wrap items-center gap-3">
+                    <button type="button" disabled={saveStatus === 'saving' || !profile?.trim() || selectedSession.exercises.length === 0} onClick={() => onStartSession(selectedRoutine.id, selectedSession.id)} className="flex min-h-11 items-center justify-center gap-2 rounded-xl bg-emerald-500 px-4 py-2 font-black text-slate-950 hover:bg-emerald-400 disabled:bg-slate-800 disabled:text-slate-400">
+                      <Play size={16} /> Empezar sesión
+                    </button>
+                    {!profile?.trim() && <button type="button" onClick={onChooseProfile} className="min-h-11 text-sm font-bold text-emerald-300">Elegir perfil en Hoy</button>}
+                  </div>
+                  <SessionExerciseList exercises={selectedSession.exercises} />
+                </div>
+              )}
             </section>
           )}
         </div>
       )}
+
+      <div className="space-y-3">
+        <div className="flex flex-wrap gap-2">
+          <button type="button" aria-expanded={showCreateRoutine} onClick={() => setShowCreateRoutine((open) => !open)} className={secondaryButtonClasses}><Plus size={17} /> Nueva rutina</button>
+          <button type="button" onClick={() => setShowImportModal(true)} className={secondaryButtonClasses}><Sparkles size={17} /> Importar con IA</button>
+        </div>
+        {showCreateRoutine && (
+          <form onSubmit={createRoutine} className="flex flex-col gap-2 rounded-2xl bg-slate-900 p-4 sm:flex-row">
+            <input aria-label="Nombre de la nueva rutina" value={newRoutineName} onChange={(event) => setNewRoutineName(event.target.value)} placeholder="Ej. Torso/Pierna" className={`${inputClasses} flex-1`} />
+            <button disabled={!newRoutineName.trim() || saveStatus === 'saving'} className={primaryButtonClasses}>Crear rutina</button>
+          </form>
+        )}
+      </div>
 
       {showImportModal && (
         <RoutineImportModal
@@ -254,9 +278,27 @@ function RoutineReadView({ routines }) {
     <div className="space-y-5">
       <header className="text-center"><h2 className="text-2xl font-black text-white flex items-center justify-center gap-3"><LayoutTemplate className="text-fuchsia-400" /> Rutinas</h2><p className="text-sm text-slate-500 mt-2">Activa el modo edición para modificar plantillas.</p></header>
       {routines.length === 0 ? <p className="text-center text-slate-500 p-10">No hay rutinas configuradas.</p> : routines.map((routine) => (
-        <section key={routine.id} className="bg-slate-900 border border-slate-800 rounded-3xl p-5"><h3 className="text-xl font-black text-white mb-4">{routine.name}</h3><div className="grid md:grid-cols-2 gap-3">{routine.sessions.map((session) => <div key={session.id} className="bg-slate-950 border border-slate-800 rounded-2xl p-4"><h4 className="font-black text-emerald-400">{session.name}</h4><div className="mt-3 space-y-2">{session.exercises.map((item) => <div key={item.id} className="flex justify-between gap-3 text-sm"><span className="text-slate-300">{item.exercise}{item.notes && <span className="block text-xs text-amber-300">{item.notes}</span>}</span><span className="font-mono text-slate-500">{item.targetSets} × {item.targetReps}</span></div>)}</div></div>)}</div></section>
+        <section key={routine.id} className="bg-slate-900 border border-slate-800 rounded-3xl p-5"><h3 className="text-xl font-black text-white mb-4">{routine.name}</h3><div className="grid md:grid-cols-2 gap-3">{routine.sessions.map((session) => <div key={session.id} className="bg-slate-950 border border-slate-800 rounded-2xl p-4"><h4 className="font-black text-emerald-400">{session.name}</h4><div className="mt-3"><SessionExerciseList exercises={session.exercises} /></div></div>)}</div></section>
       ))}
     </div>
+  );
+}
+
+function SessionExerciseList({ exercises }) {
+  if (exercises.length === 0) return <p className="text-sm text-slate-400">Esta sesión aún no tiene ejercicios.</p>;
+
+  return (
+    <ul className="divide-y divide-slate-800 rounded-xl bg-slate-950 px-3">
+      {exercises.map((item) => (
+        <li key={item.id} className="flex justify-between gap-3 py-3 text-sm">
+          <div className="min-w-0 break-words text-slate-200">
+            {item.exercise}
+            {item.notes && <p className="text-xs text-amber-300">{item.notes}</p>}
+          </div>
+          <span className="shrink-0 font-mono text-slate-400">{item.targetSets} × {item.targetReps}</span>
+        </li>
+      ))}
+    </ul>
   );
 }
 

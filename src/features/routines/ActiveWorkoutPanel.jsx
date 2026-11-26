@@ -1,6 +1,6 @@
-import { Check, CircleStop, Dumbbell, Pencil, Plus, Save, Trash2, X } from 'lucide-react';
+import { Check, ChevronDown, CircleStop, Dumbbell, Ellipsis, Pencil, Plus, Save, Trash2, X } from 'lucide-react';
 import { useState } from 'react';
-import { moreWeightReminderKey } from '../../lib/workoutFlow';
+import { canCompleteSet, isValidSetReps, moreWeightReminderKey } from '../../lib/workoutFlow';
 
 export default function ActiveWorkoutPanel({ workout, moreWeightReminders, saveStatus, saveMessage, onWorkoutChange, onSaveProgress, onFinish, onCancel }) {
   const [showFinish, setShowFinish] = useState(false);
@@ -15,7 +15,7 @@ export default function ActiveWorkoutPanel({ workout, moreWeightReminders, saveS
         ? { ...exercise, sets: exercise.sets.map((set) => {
           if (set.id !== setId) return set;
           const next = { ...set, ...patch };
-          return { ...next, completed: next.completed && Number(next.actualReps) > 0 && Number(next.weight) > 0 };
+          return { ...next, completed: next.completed && canCompleteSet(next) };
         }) }
         : exercise),
     });
@@ -37,40 +37,50 @@ export default function ActiveWorkoutPanel({ workout, moreWeightReminders, saveS
     <div className="space-y-5 animate-in fade-in slide-in-from-bottom-4 duration-500">
       <section className="bg-slate-900 border border-slate-800 rounded-3xl overflow-hidden shadow-xl">
         <div className="p-5 border-b border-slate-800 space-y-4">
-          <div className="flex flex-col md:flex-row md:items-start md:justify-between gap-4">
-            <div>
+          <div className="flex items-start justify-between gap-3">
+            <div className="min-w-0 break-words">
               <p className="text-xs font-black uppercase tracking-wider text-fuchsia-400">{workout.routineName}</p>
               <h2 className="text-2xl font-black text-white mt-1">{workout.sessionName}</h2>
               <p className="text-sm text-slate-400 mt-1">{workout.user} · {formatDate(workout.date)}</p>
             </div>
-            <div className="text-left md:text-right">
-              <p className="text-3xl font-black text-emerald-400">{completedSets}/{allSets.length}</p>
-              <p className="text-xs text-slate-500 font-bold uppercase tracking-wider">series completadas</p>
-            </div>
+            <details className="relative shrink-0">
+              <summary aria-label="Opciones de la sesión" className="grid size-11 cursor-pointer list-none place-items-center rounded-xl text-slate-300 hover:bg-slate-800">
+                <Ellipsis size={20} />
+              </summary>
+              <div className="absolute right-0 top-full z-10 mt-1 w-max rounded-xl border border-slate-700 bg-slate-950 p-1 shadow-lg">
+                <button type="button" onClick={onCancel} disabled={saveStatus === 'saving'} className="flex min-h-11 items-center gap-2 rounded-lg px-3 text-sm font-bold text-red-300 hover:bg-red-500/10 disabled:opacity-50"><X size={17} /> Descartar sesión</button>
+              </div>
+            </details>
           </div>
-          <div className="h-2 rounded-full bg-slate-950 overflow-hidden"><div className="h-full bg-emerald-500 transition-all" style={{ width: `${completion}%` }} /></div>
         </div>
 
         <div className="p-4 sm:p-5 space-y-4">
-          {workout.exercises.map((exercise, index) => (
-            <ExerciseCard
-              key={exercise.id}
-              exercise={exercise}
-              index={index}
-              reminderWeight={moreWeightReminders[moreWeightReminderKey(workout.user, exercise.exercise)]}
-              onUpdateSet={(setId, patch) => updateSet(exercise.id, setId, patch)}
-              onUpdateExercise={(updater) => updateExercise(exercise.id, updater)}
-              onRemove={() => removeExercise(exercise.id)}
-            />
-          ))}
+          {workout.exercises.map((exercise, index) => {
+            const reminderKey = moreWeightReminderKey(workout.user, exercise.exercise);
+            return (
+              <ExerciseCard
+                key={exercise.id}
+                exercise={exercise}
+                index={index}
+                reminderKey={reminderKey}
+                reminderWeight={moreWeightReminders[reminderKey]}
+                onUpdateSet={(setId, patch) => updateSet(exercise.id, setId, patch)}
+                onUpdateExercise={(updater) => updateExercise(exercise.id, updater)}
+                onRemove={() => removeExercise(exercise.id)}
+              />
+            );
+          })}
           {workout.exercises.length === 0 && <p className="p-8 text-center text-slate-500">No quedan ejercicios en esta sesión.</p>}
         </div>
       </section>
 
       {saveMessage && <p className={`text-sm rounded-xl border p-3 ${saveStatus === 'error' ? 'text-red-300 bg-red-500/10 border-red-500/30' : 'text-emerald-300 bg-emerald-500/10 border-emerald-500/30'}`}>{saveMessage}</p>}
 
-      <div className="sticky bottom-[calc(5rem+env(safe-area-inset-bottom))] md:bottom-4 z-20 bg-slate-900/95 backdrop-blur border border-slate-700 rounded-2xl p-3 shadow-2xl grid grid-cols-2 gap-2">
-        <button type="button" onClick={onCancel} disabled={saveStatus === 'saving'} className="min-h-11 px-3 py-2 rounded-xl text-sm font-bold text-red-300 hover:bg-red-500/10 flex items-center justify-center gap-2"><X size={17} /> Descartar</button>
+      <div className="sticky bottom-[calc(5rem+env(safe-area-inset-bottom))] md:bottom-4 z-20 grid grid-cols-[minmax(0,1fr)_auto] items-center gap-2 rounded-2xl border border-slate-700 bg-slate-900/95 px-3 py-2 shadow-2xl backdrop-blur">
+        <div className="min-w-0">
+          <p className="text-sm text-slate-300"><strong className="text-emerald-300">{completedSets}/{allSets.length}</strong> series completadas</p>
+          <div className="mt-1 h-1.5 max-w-64 overflow-hidden rounded-full bg-slate-950"><div className="h-full bg-emerald-500 transition-all" style={{ width: `${completion}%` }} /></div>
+        </div>
         <button type="button" onClick={() => setShowFinish(true)} disabled={saveStatus === 'saving' || completedSets === 0} className="col-start-2 row-start-1 min-h-11 px-3 py-2 rounded-xl text-sm font-black bg-emerald-500 hover:bg-emerald-400 disabled:bg-slate-800 disabled:text-slate-600 text-slate-950 flex items-center justify-center gap-2"><CircleStop size={17} /> Finalizar</button>
         {saveStatus === 'error' && <button type="button" onClick={onSaveProgress} className="col-span-2 row-start-2 min-h-11 px-3 py-2 rounded-xl text-sm font-bold bg-slate-800 text-white flex items-center justify-center gap-2"><Save size={17} /> Reintentar guardado</button>}
       </div>
@@ -79,15 +89,22 @@ export default function ActiveWorkoutPanel({ workout, moreWeightReminders, saveS
   );
 }
 
-function ExerciseCard({ exercise, index, reminderWeight, onUpdateSet, onUpdateExercise, onRemove }) {
+function ExerciseCard({ exercise, index, reminderKey, reminderWeight, onUpdateSet, onUpdateExercise, onRemove }) {
   const [draftName, setDraftName] = useState(null);
+  const dismissedReminderKeys = exercise.dismissMoreWeightReminder === true
+    ? [reminderKey]
+    : exercise.dismissMoreWeightReminder || [];
   const completed = exercise.sets.filter((set) => set.completed).length;
   const saveName = (event) => {
     event.preventDefault();
     const name = draftName.trim();
     if (!name) return;
     if (name !== exercise.exercise) {
-      onUpdateExercise((current) => ({ ...current, exercise: name }));
+      onUpdateExercise((current) => ({
+        ...current,
+        exercise: name,
+        dismissMoreWeightReminder: dismissedReminderKeys,
+      }));
     }
     setDraftName(null);
   };
@@ -129,7 +146,7 @@ function ExerciseCard({ exercise, index, reminderWeight, onUpdateSet, onUpdateEx
 
   return (
     <article className="bg-slate-950/70 border border-slate-800 rounded-2xl overflow-hidden">
-      <div className="px-4 py-4 border-b border-slate-800 flex flex-col lg:flex-row lg:items-center gap-3">
+      <div className="border-b border-slate-800 px-4 py-3">
         <div className="min-w-0 flex-1">
           <p className="text-xs text-slate-400 font-black">EJERCICIO {index + 1}</p>
           <div className="flex items-center gap-3">
@@ -155,38 +172,45 @@ function ExerciseCard({ exercise, index, reminderWeight, onUpdateSet, onUpdateEx
           </div>
           {exercise.notes && <p className="text-xs text-amber-300 mt-1">{exercise.notes}</p>}
           {exercise.previousWeight != null && <p className="text-xs text-slate-400 mt-1">Último peso registrado: {exercise.previousWeight} kg</p>}
-          {reminderWeight != null && !exercise.dismissMoreWeightReminder && (
+          {reminderWeight != null && !dismissedReminderKeys.includes(reminderKey) && (
             <div className="mt-1 flex flex-wrap items-center gap-x-2 text-xs">
               <p className="text-emerald-300">Pendiente: probar más peso que {reminderWeight} kg</p>
-              <button type="button" onClick={() => onUpdateExercise((current) => ({ ...current, dismissMoreWeightReminder: true }))} className="py-2 text-slate-400 underline hover:text-white">Quitar aviso</button>
+              <button type="button" onClick={() => onUpdateExercise((current) => ({ ...current, dismissMoreWeightReminder: [...dismissedReminderKeys, reminderKey] }))} className="py-2 text-slate-400 underline hover:text-white">Quitar aviso</button>
             </div>
           )}
           <p className="text-xs text-emerald-400 mt-1">{completed}/{exercise.sets.length} series</p>
-        </div>
-        <div className="grid gap-2">
-          <PendingSetsField label="Reps" buttonLabel="Aplicar repeticiones a pendientes" min="1" step="1" inputMode="numeric" defaultValue={exercise.sets.find((set) => Number.isInteger(Number(set.actualReps)) && Number(set.actualReps) > 0)?.actualReps ?? ''} onSubmit={(event) => applyToPending(event, 'actualReps')} />
-          <PendingSetsField label="Peso kg" inputColors={weightInputColors} buttonLabel="Aplicar peso a pendientes" min="0.1" step="0.1" inputMode="decimal" defaultValue={exercise.sets.find((set) => set.weight)?.weight || ''} onSubmit={(event) => applyToPending(event, 'weight')} />
         </div>
       </div>
 
       <div>
         <div>
-          <div className="grid grid-cols-[2rem_minmax(0,1fr)_minmax(0,1fr)_2.75rem] sm:grid-cols-[4rem_1fr_1fr_5rem] gap-2 px-3 py-2 text-[10px] font-black uppercase tracking-wider text-slate-400"><span>Serie</span><span>Reps</span><span>Peso kg</span><span className="text-center">Hecha</span></div>
+          <div className="grid grid-cols-[1.75rem_minmax(0,1fr)_minmax(0,1fr)_2.75rem_2.75rem] sm:grid-cols-[3rem_minmax(0,1fr)_minmax(0,1fr)_4rem_2.75rem] gap-2 px-3 py-2 text-[10px] font-black uppercase tracking-wider text-slate-400"><span>Serie</span><span>Reps</span><span>Peso kg</span><span className="text-center">Hecha</span></div>
           {exercise.sets.map((set) => {
-            const canComplete = Number(set.actualReps) > 0 && Number(set.weight) > 0;
+            const canComplete = canCompleteSet(set);
+            const invalidReps = String(set.actualReps ?? '') !== '' && !isValidSetReps(set.actualReps);
             return (
-              <div key={set.id} className={`grid grid-cols-[2rem_minmax(0,1fr)_minmax(0,1fr)_2.75rem] sm:grid-cols-[4rem_1fr_1fr_5rem] gap-x-2 gap-y-1 items-center px-3 py-3 border-t border-slate-800/70 ${set.completed ? 'bg-emerald-500/[0.06]' : ''}`}>
-                <div className="flex items-center gap-1"><span className="font-black text-white">{set.number}</span><button type="button" onClick={() => removeSet(set.id)} disabled={exercise.sets.length <= 1} className="p-1 text-slate-700 hover:text-red-300 disabled:hidden"><Trash2 size={12} /></button></div>
-                <input aria-describedby={`set-target-${set.id}`} aria-label={`Repeticiones serie ${set.number} de ${exercise.exercise}`} inputMode="numeric" type="number" min="1" step="1" value={set.actualReps} onChange={(event) => onUpdateSet(set.id, { actualReps: event.target.value })} className={`${setInputClasses} ${neutralInputColors}`} />
+              <div key={set.id} className={`grid grid-cols-[1.75rem_minmax(0,1fr)_minmax(0,1fr)_2.75rem_2.75rem] sm:grid-cols-[3rem_minmax(0,1fr)_minmax(0,1fr)_4rem_2.75rem] gap-x-2 gap-y-1 items-center px-3 py-3 border-t border-slate-800/70 ${set.completed ? 'bg-emerald-500/[0.06]' : ''}`}>
+                <span className="text-center font-black text-white">{set.number}</span>
+                <input aria-invalid={invalidReps} aria-describedby={`set-target-${set.id}`} aria-label={`Repeticiones serie ${set.number} de ${exercise.exercise}`} inputMode="numeric" type="number" min="1" step="1" value={set.actualReps} onChange={(event) => onUpdateSet(set.id, { actualReps: event.target.value })} className={`${setInputClasses} ${neutralInputColors}`} />
                 <input aria-label={`Peso serie ${set.number} de ${exercise.exercise}`} inputMode="decimal" type="number" min="0.1" step="0.1" value={set.weight} onChange={(event) => onUpdateSet(set.id, { weight: event.target.value })} className={`${setInputClasses} ${weightInputColors}`} />
-                <div className="flex justify-center"><button type="button" onClick={() => canComplete && onUpdateSet(set.id, { completed: !set.completed })} disabled={!canComplete} aria-pressed={set.completed} className={`w-11 h-11 rounded-xl border flex items-center justify-center transition-all ${set.completed ? 'bg-emerald-500 border-emerald-400 text-slate-950' : canComplete ? 'bg-slate-900 border-slate-700 text-slate-500 hover:border-emerald-500' : 'bg-slate-900 border-slate-800 text-slate-700 opacity-40'}`} aria-label={`Marcar serie ${set.number} de ${exercise.exercise}`}><Check size={20} strokeWidth={3} /></button></div>
-                <span id={`set-target-${set.id}`} className="col-start-2 row-start-2 text-[10px] text-slate-400">Objetivo: {set.targetReps}</span>
+                <div className="flex justify-center"><button type="button" onClick={() => onUpdateSet(set.id, { completed: !set.completed })} disabled={!canComplete && !set.completed} aria-pressed={set.completed} className={`w-11 h-11 rounded-xl border flex items-center justify-center transition-all ${set.completed ? 'bg-emerald-500 border-emerald-400 text-slate-950' : canComplete ? 'bg-slate-900 border-slate-700 text-slate-500 hover:border-emerald-500' : 'bg-slate-900 border-slate-800 text-slate-700 opacity-40'}`} aria-label={`Marcar serie ${set.number} de ${exercise.exercise}`}><Check size={20} strokeWidth={3} /></button></div>
+                <button type="button" onClick={() => removeSet(set.id)} disabled={exercise.sets.length <= 1} aria-label={`Eliminar serie ${set.number} de ${exercise.exercise}`} className="grid size-11 place-items-center rounded-lg text-slate-400 hover:bg-red-500/10 hover:text-red-300 disabled:invisible"><Trash2 size={16} /></button>
+                <span id={`set-target-${set.id}`} className={`col-start-2 row-start-2 text-[10px] ${invalidReps ? 'text-red-300' : 'text-slate-400'}`}>{invalidReps ? 'Reps sin decimales, mínimo 1' : `Objetivo: ${set.targetReps}`}</span>
               </div>
             );
           })}
         </div>
       </div>
       <button type="button" onClick={addSet} className="w-full border-t border-slate-800 py-3 text-sm font-bold text-slate-500 hover:text-emerald-400 hover:bg-slate-900 flex items-center justify-center gap-2"><Plus size={15} /> Añadir serie</button>
+      <details className="group border-t border-slate-800">
+        <summary className="flex min-h-11 cursor-pointer list-none items-center justify-between gap-2 px-3 py-2 text-sm font-bold text-slate-300">
+          Ajustar pendientes <ChevronDown size={16} className="group-open:rotate-180" />
+        </summary>
+        <div className="grid gap-2 px-3 pb-3 sm:grid-cols-2">
+          <PendingSetsField label="Reps" buttonLabel="Aplicar repeticiones a pendientes" min="1" step="1" inputMode="numeric" defaultValue={exercise.sets.find((set) => isValidSetReps(set.actualReps))?.actualReps ?? ''} onSubmit={(event) => applyToPending(event, 'actualReps')} />
+          <PendingSetsField label="Peso kg" inputColors={weightInputColors} buttonLabel="Aplicar peso a pendientes" min="0.1" step="0.1" inputMode="decimal" defaultValue={exercise.sets.find((set) => set.weight)?.weight || ''} onSubmit={(event) => applyToPending(event, 'weight')} />
+        </div>
+      </details>
       <label className="flex min-h-11 cursor-pointer items-center gap-2 border-t border-slate-800 px-3 py-2 text-sm text-slate-300">
         <input type="checkbox" checked={Boolean(exercise.moreWeightNextTime)} onChange={(event) => {
           const moreWeightNextTime = event.target.checked;

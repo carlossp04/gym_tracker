@@ -1,5 +1,6 @@
 import { useState } from 'react';
-import { CalendarDays, CheckCircle2, ClipboardPaste, Copy, Dumbbell, LayoutTemplate, Play, Plus, Save, Trash2, User, XCircle } from 'lucide-react';
+import { CalendarDays, CheckCircle2, ClipboardPaste, Copy, Dumbbell, LayoutTemplate, Play, Plus, Save, Trash2, XCircle } from 'lucide-react';
+import TrainingProfilePicker from './TrainingProfilePicker';
 import useDraftField from '../../lib/useDraftField';
 
 const MANUAL_MODE = 'manual';
@@ -17,10 +18,9 @@ export default function TrainingInputPanel({
   onAppendTraining,
   onAddManualWorkout,
   onStartTemplateWorkout,
-  drafts, onDraftChange, profile, importPreview, onCreateRoutine,
+  drafts, onDraftChange, profile: user, importPreview, onCreateRoutine, onUserChange, onCreateProfile,
 }) {
   const [inputMode, setInputMode] = useDraftField(drafts, onDraftChange, 'inputMode', () => routines.length > 0 ? TEMPLATE_MODE : MANUAL_MODE);
-  const [user, setUser] = useDraftField(drafts, onDraftChange, 'profile', profile);
   const [date, setDate] = useDraftField(drafts, onDraftChange, 'manualDate', getTodayInputValue);
   const [dayLabel, setDayLabel] = useDraftField(drafts, onDraftChange, 'manualName', 'Entrenamiento manual');
   const [exercise, setExercise] = useDraftField(drafts, onDraftChange, 'manualExercise', '');
@@ -109,7 +109,7 @@ export default function TrainingInputPanel({
                 setSelectedRoutineId(routineId);
                 setSelectedSessionId('');
               }}
-              onSessionChange={setSelectedSessionId} onUserChange={setUser} onDateChange={setDate}
+              onSessionChange={setSelectedSessionId} onUserChange={onUserChange} onCreateProfile={onCreateProfile} onDateChange={setDate}
               onStart={() => onStartTemplateWorkout({
                 routineId: selectedRoutine?.id,
                 sessionId: selectedSession?.id,
@@ -124,7 +124,7 @@ export default function TrainingInputPanel({
               sets={sets} reps={reps} weight={weight} draftEntries={draftEntries}
               availableUsers={availableUsers} exerciseOptions={exerciseOptions}
               manualError={manualError} isSaving={saveStatus === 'saving'}
-              onUserChange={setUser} onDateChange={setDate} onDayLabelChange={setDayLabel}
+              onUserChange={onUserChange} onCreateProfile={onCreateProfile} onDateChange={setDate} onDayLabelChange={setDayLabel}
               onExerciseChange={setExercise} onSetsChange={setSets} onRepsChange={setReps} onWeightChange={setWeight}
               onAddDraftExercise={addDraftExercise}
               onRemoveDraftExercise={(id) => setDraftEntries((current) => current.filter((entry) => entry.id !== id))}
@@ -147,7 +147,7 @@ export default function TrainingInputPanel({
 
 function RoutineLauncher({
   routines, selectedRoutine, selectedSession, user, date, availableUsers, isSaving,
-  onRoutineChange, onSessionChange, onUserChange, onDateChange, onStart,
+  onRoutineChange, onSessionChange, onUserChange, onCreateProfile, onDateChange, onStart,
   onCreateRoutine,
 }) {
   if (routines.length === 0) {
@@ -174,10 +174,7 @@ function RoutineLauncher({
             {(selectedRoutine?.sessions || []).map((session) => <option key={session.id} value={session.id}>{session.name}</option>)}
           </select>
         </Field>
-        <Field label="Usuario" icon={User}>
-          <input list="template-workout-users" value={user} onChange={(event) => onUserChange(event.target.value)} className={inputClasses} />
-          <datalist id="template-workout-users">{availableUsers.map((option) => <option key={option} value={option} />)}</datalist>
-        </Field>
+        <TrainingProfilePicker user={user} users={availableUsers} onUserChange={onUserChange} onCreateProfile={onCreateProfile} />
         <Field label="Fecha" icon={CalendarDays}>
           <input type="date" value={date} onChange={(event) => onDateChange(event.target.value)} className={inputClasses} />
         </Field>
@@ -208,7 +205,7 @@ function ManualWorkoutBuilder(props) {
   const {
     user, date, dayLabel, exercise, sets, reps, weight, draftEntries,
     availableUsers, exerciseOptions, manualError, isSaving,
-    onUserChange, onDateChange, onDayLabelChange, onExerciseChange,
+    onUserChange, onCreateProfile, onDateChange, onDayLabelChange, onExerciseChange,
     onSetsChange, onRepsChange, onWeightChange, onAddDraftExercise,
     onRemoveDraftExercise, onClearDraft, onSave,
   } = props;
@@ -216,10 +213,7 @@ function ManualWorkoutBuilder(props) {
   return (
     <div className="space-y-5">
       <div className="grid md:grid-cols-3 gap-3">
-        <Field label="Usuario" icon={User}>
-          <input list="manual-workout-users" value={user} onChange={(event) => onUserChange(event.target.value)} placeholder="Nombre" className={inputClasses} />
-          <datalist id="manual-workout-users">{availableUsers.map((option) => <option key={option} value={option} />)}</datalist>
-        </Field>
+        <TrainingProfilePicker user={user} users={availableUsers} onUserChange={onUserChange} onCreateProfile={onCreateProfile} />
         <Field label="Fecha" icon={CalendarDays}>
           <input type="date" value={date} onChange={(event) => onDateChange(event.target.value)} className={inputClasses} />
         </Field>

@@ -22,6 +22,9 @@ export default function TrainingRecordsTab({
   const setFilters = focusedWorkout ? setFocusedFilters : setSavedFilters;
   const [selectedEntryIds, setSelectedEntryIds] = useState([]);
 
+  const [showFilters, setShowFilters] = useState(false);
+  const activeFilterCount = [filters.user, filters.exercise, filters.fromDate, filters.toDate].filter((value) => value && value !== ALL_OPTIONS).length;
+
   const users = useMemo(
     () => [ALL_OPTIONS, ...new Set(trainingEntries.map((entry) => entry.user).sort())],
     [trainingEntries],
@@ -50,6 +53,10 @@ export default function TrainingRecordsTab({
     });
   }, [filters, trainingEntries]);
 
+  const fullWorkoutEntries = useMemo(
+    () => new Map(groupEntriesByWorkout(trainingEntries).map((group) => [group.key, group.entries])),
+    [trainingEntries],
+  );
   const groupedEntries = useMemo(() => groupEntriesByWorkout(filteredEntries), [filteredEntries]);
   const filteredEntryIds = useMemo(() => new Set(filteredEntries.map((entry) => entry.id)), [filteredEntries]);
   const selectedEntryIdSet = useMemo(() => new Set(selectedEntryIds), [selectedEntryIds]);
@@ -158,70 +165,78 @@ export default function TrainingRecordsTab({
             </div>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-[1.4fr_1fr_1fr_0.8fr_0.8fr_auto] gap-3">
+          <div className="grid grid-cols-[minmax(0,1fr)_auto] gap-3 md:grid-cols-2 xl:grid-cols-[1.4fr_1fr_1fr_0.8fr_0.8fr_auto]">
             <label className="relative">
               <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" />
               <input
                 type="search"
                 value={filters.search}
                 onChange={(event) => updateFilter('search', event.target.value)}
+                aria-label="Buscar registros"
                 placeholder="Buscar ejercicio, usuario, día..."
                 className="w-full bg-slate-950 border border-slate-800 rounded-xl pl-10 pr-3 py-3 text-sm text-white placeholder:text-slate-600 focus:outline-none focus:border-emerald-500/50"
               />
             </label>
 
-            <select
-              value={filters.user}
-              onChange={(event) => updateFilter('user', event.target.value)}
-              className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-3 text-sm text-white focus:outline-none focus:border-emerald-500/50"
-            >
-              {users.map((user) => <option key={user} value={user}>{user === ALL_OPTIONS ? 'Todos los usuarios' : user}</option>)}
-            </select>
-
-            <select
-              value={filters.exercise}
-              onChange={(event) => updateFilter('exercise', event.target.value)}
-              className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-3 text-sm text-white focus:outline-none focus:border-emerald-500/50"
-            >
-              {exercises.map((exercise) => <option key={exercise} value={exercise}>{exercise === ALL_OPTIONS ? 'Todos los ejercicios' : exercise}</option>)}
-            </select>
-
-            <label className="relative">
-              <span className="absolute left-10 top-1.5 text-[10px] font-bold uppercase tracking-wider text-slate-500">Desde</span>
-              <CalendarDays size={16} className="absolute left-3 top-1/2 translate-y-0 text-slate-500" />
-              <input
-                type="date"
-                value={filters.fromDate}
-                onChange={(event) => updateFilter('fromDate', event.target.value)}
-                className="w-full bg-slate-950 border border-slate-800 rounded-xl pl-10 pr-3 pt-6 pb-2 text-sm text-white focus:outline-none focus:border-emerald-500/50"
-                aria-label="Fecha desde"
-              />
-            </label>
-
-            <label className="relative">
-              <span className="absolute left-10 top-1.5 text-[10px] font-bold uppercase tracking-wider text-slate-500">Hasta</span>
-              <CalendarDays size={16} className="absolute left-3 top-1/2 translate-y-0 text-slate-500" />
-              <input
-                type="date"
-                value={filters.toDate}
-                onChange={(event) => updateFilter('toDate', event.target.value)}
-                className="w-full bg-slate-950 border border-slate-800 rounded-xl pl-10 pr-3 pt-6 pb-2 text-sm text-white focus:outline-none focus:border-emerald-500/50"
-                aria-label="Fecha hasta"
-              />
-            </label>
-
-            <button
-              onClick={clearFilters}
-              disabled={!hasActiveFilters}
-              className="bg-slate-800 hover:bg-slate-700 disabled:bg-slate-900 disabled:text-slate-700 disabled:cursor-not-allowed text-slate-300 px-4 py-3 rounded-xl text-sm font-bold flex items-center justify-center gap-2"
-              title="Limpiar filtros"
-            >
-              <FilterX size={16} /> Limpiar
+            <button type="button" aria-expanded={showFilters} aria-controls="record-filters" onClick={() => setShowFilters((open) => !open)} className="flex min-h-11 items-center gap-2 rounded-xl bg-slate-800 px-3 text-sm font-bold text-slate-200 md:hidden">
+              Filtros{activeFilterCount > 0 && ` (${activeFilterCount})`}
+              <ChevronDown size={16} className={showFilters ? 'rotate-180' : ''} />
             </button>
+
+            <div id="record-filters" className={`col-span-2 min-w-0 grid-cols-1 gap-3 md:contents ${showFilters ? 'grid' : 'hidden'}`}>
+              <select
+                value={filters.user}
+                onChange={(event) => updateFilter('user', event.target.value)}
+                className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-3 text-sm text-white focus:outline-none focus:border-emerald-500/50"
+              >
+                {users.map((user) => <option key={user} value={user}>{user === ALL_OPTIONS ? 'Todos los usuarios' : user}</option>)}
+              </select>
+
+              <select
+                value={filters.exercise}
+                onChange={(event) => updateFilter('exercise', event.target.value)}
+                className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-3 text-sm text-white focus:outline-none focus:border-emerald-500/50"
+              >
+                {exercises.map((exercise) => <option key={exercise} value={exercise}>{exercise === ALL_OPTIONS ? 'Todos los ejercicios' : exercise}</option>)}
+              </select>
+
+              <label className="relative">
+                <span className="absolute left-10 top-1.5 text-[10px] font-bold uppercase tracking-wider text-slate-500">Desde</span>
+                <CalendarDays size={16} className="absolute left-3 top-1/2 translate-y-0 text-slate-500" />
+                <input
+                  type="date"
+                  value={filters.fromDate}
+                  onChange={(event) => updateFilter('fromDate', event.target.value)}
+                  className="w-full bg-slate-950 border border-slate-800 rounded-xl pl-10 pr-3 pt-6 pb-2 text-sm text-white focus:outline-none focus:border-emerald-500/50"
+                  aria-label="Fecha desde"
+                />
+              </label>
+
+              <label className="relative">
+                <span className="absolute left-10 top-1.5 text-[10px] font-bold uppercase tracking-wider text-slate-500">Hasta</span>
+                <CalendarDays size={16} className="absolute left-3 top-1/2 translate-y-0 text-slate-500" />
+                <input
+                  type="date"
+                  value={filters.toDate}
+                  onChange={(event) => updateFilter('toDate', event.target.value)}
+                  className="w-full bg-slate-950 border border-slate-800 rounded-xl pl-10 pr-3 pt-6 pb-2 text-sm text-white focus:outline-none focus:border-emerald-500/50"
+                  aria-label="Fecha hasta"
+                />
+              </label>
+
+              <button
+                onClick={clearFilters}
+                disabled={!hasActiveFilters}
+                className="bg-slate-800 hover:bg-slate-700 disabled:bg-slate-900 disabled:text-slate-700 disabled:cursor-not-allowed text-slate-300 px-4 py-3 rounded-xl text-sm font-bold flex items-center justify-center gap-2"
+                title="Limpiar filtros"
+              >
+                <FilterX size={16} /> Limpiar
+              </button>
+            </div>
           </div>
         </div>
 
-        <div className="max-h-[70dvh] overflow-auto">
+        <div className="md:max-h-[70dvh] md:overflow-auto">
           <table className="w-full text-left min-w-[860px] hidden md:table">
             <thead className="sticky top-0 z-10 bg-slate-950 text-slate-500 uppercase text-xs tracking-wider font-bold shadow-lg shadow-slate-950/30">
               <tr>
@@ -255,6 +270,7 @@ export default function TrainingRecordsTab({
                   key={group.key}
                   canEdit={canEdit}
                   group={group}
+                  workoutEntries={fullWorkoutEntries.get(group.key)}
                   groupIndex={groupIndex}
                   isFocused={focusedWorkout?.workoutKey === group.key}
                   onOpenTrainingEdit={onOpenTrainingEdit}
@@ -280,7 +296,7 @@ export default function TrainingRecordsTab({
                   <h3 className="font-bold text-emerald-300">{group.dayLabel}</h3>
                   <p className="text-sm text-slate-400">{group.date} · {group.user} · {group.entries.reduce((sum, entry) => sum + entry.sets, 0)} series</p>
                 </div>
-                <WorkoutActions entries={group.entries} isSaving={isSaving} onRepeat={onRepeatWorkout} onSaveAsRoutine={onSaveAsRoutine} />
+                <WorkoutActions entries={fullWorkoutEntries.get(group.key)} isSaving={isSaving} onRepeat={onRepeatWorkout} onSaveAsRoutine={onSaveAsRoutine} />
                 {[...groupEntriesByExercise(group.entries)].map(([exercise, entries]) => {
                   const rows = entries.map((entry) => (
                     <div key={entry.id} className="rounded-xl bg-slate-950 p-3 flex items-center gap-3">
@@ -304,7 +320,7 @@ export default function TrainingRecordsTab({
                       <summary className="flex cursor-pointer list-none items-center gap-2 p-3">
                         <ChevronDown size={16} className="shrink-0 text-slate-400 group-open:rotate-180" />
                         <span className="min-w-0 flex-1 break-words font-bold">{exercise}</span>
-                        <span className="shrink-0 text-sm text-slate-400">{countSeries(entries)} series</span>
+                        <span className="max-w-[50%] text-right text-xs text-slate-400">{exerciseSummary(entries)}</span>
                       </summary>
                       <div className="divide-y divide-slate-800 border-t border-slate-800">{rows}</div>
                     </details>
@@ -323,6 +339,7 @@ export default function TrainingRecordsTab({
 function WorkoutGroup({
   canEdit,
   group,
+  workoutEntries,
   groupIndex,
   isFocused,
   onOpenTrainingEdit,
@@ -361,7 +378,7 @@ function WorkoutGroup({
               <span className="bg-slate-950/70 border border-slate-800 rounded-full px-2 py-1">{group.entries.reduce((sum, entry) => sum + entry.sets, 0)} series</span>
               <span className="bg-slate-950/70 border border-slate-800 rounded-full px-2 py-1">{totalVolume} kg vol</span>
             </div>
-            <WorkoutActions entries={group.entries} isSaving={isSaving} onRepeat={onRepeatWorkout} onSaveAsRoutine={onSaveAsRoutine} />
+            <WorkoutActions entries={workoutEntries} isSaving={isSaving} onRepeat={onRepeatWorkout} onSaveAsRoutine={onSaveAsRoutine} />
           </div>
         </td>
       </tr>
@@ -376,7 +393,7 @@ function WorkoutGroup({
                   <button type="button" aria-expanded={isExpanded} onClick={() => toggleExercise(exercise)} className="flex w-full items-center gap-3 px-4 py-3 text-left hover:bg-slate-800/40">
                     <ChevronDown size={16} className={`shrink-0 text-slate-400 ${isExpanded ? 'rotate-180' : ''}`} />
                     <span className="font-bold text-white">{exercise}</span>
-                    <span className="ml-auto text-slate-400">{countSeries(entries)} series</span>
+                    <span className="ml-auto text-slate-400">{exerciseSummary(entries)}</span>
                   </button>
                 </td>
               </tr>
@@ -452,8 +469,12 @@ function groupEntriesByExercise(entries) {
   return groups;
 }
 
-function countSeries(entries) {
-  return entries.reduce((sum, entry) => sum + entry.sets, 0);
+function exerciseSummary(entries) {
+  const series = entries.reduce((sum, entry) => sum + entry.sets, 0);
+  const weights = entries.map((entry) => entry.weight);
+  const min = Math.min(...weights);
+  const max = Math.max(...weights);
+  return `${series} series · ${min === max ? min : `${min}–${max}`} kg`;
 }
 
 function groupEntriesByWorkout(entries) {

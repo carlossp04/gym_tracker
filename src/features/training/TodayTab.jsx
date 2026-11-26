@@ -1,7 +1,9 @@
 import { ArrowRight, ChevronDown, Play, Plus } from 'lucide-react';
+import { getLastRoutineSessionEntry } from '../../lib/workoutFlow';
+import TrainingProfilePicker from './TrainingProfilePicker';
 
 export default function TodayTab({
-  user, users, onUserChange, activeWorkout, routines, entries, isSaving,
+  user, users, onUserChange, onCreateProfile, activeWorkout, routines, entries, isSaving,
   routineId, onRoutineChange, onContinue, onFreeSession, onRoutineStart, onCreateRoutine, onRepeat, onOpenWorkout,
 }) {
   const availableRoutines = routines.map((routine) => ({
@@ -21,11 +23,7 @@ export default function TodayTab({
     <div className="mx-auto max-w-xl space-y-4">
       <header className="flex flex-wrap items-end justify-between gap-3">
         <h2 className="text-3xl font-black text-white">Hoy</h2>
-        <label className="flex min-w-0 items-center gap-2 text-sm text-slate-400">
-          Perfil
-          <input list="today-users" value={user} onChange={(event) => onUserChange(event.target.value)} placeholder="Tu nombre" className="min-h-11 w-32 min-w-0 rounded-xl border border-slate-700 bg-slate-900 px-3 text-slate-100 placeholder:text-slate-500 sm:w-44" />
-          <datalist id="today-users">{users.map((name) => <option key={name} value={name} />)}</datalist>
-        </label>
+        <TrainingProfilePicker user={user} users={users} onUserChange={onUserChange} onCreateProfile={onCreateProfile} />
       </header>
 
       <section className="space-y-4 rounded-2xl border border-emerald-500/25 bg-emerald-500/[0.06] p-4 sm:p-5">
@@ -48,10 +46,10 @@ export default function TodayTab({
                 </select>
               </label>
             ) : <h3 className="break-words text-xl font-black text-white">{routine.name}</h3>}
-            {!profile && <p className="text-sm text-slate-400">Escribe tu nombre en Perfil para empezar.</p>}
+            {!profile && <p className="text-sm text-slate-400">Elige o crea un perfil para empezar.</p>}
             <div className="space-y-2">
               {routine.sessions.map((session) => {
-                const previous = profileEntries.find((entry) => entry.dayLabel === session.name);
+                const previous = getLastRoutineSessionEntry(profileEntries, routines, routine.id, session);
                 const exerciseCount = session.exercises.length;
                 return (
                   <details key={JSON.stringify([routine.id, session.id])} name="today-session" className="group rounded-xl border border-slate-800 bg-slate-900">

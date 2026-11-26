@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { inspectTrainingImport, moreWeightReminderKey, routineFromEntries, updateMoreWeightReminders, workoutFromEntries } from '../src/lib/workoutFlow.js';
+import { canCompleteSet, getLastRoutineSessionEntry, inspectTrainingImport, moreWeightReminderKey, routineFromEntries, updateMoreWeightReminders, workoutFromEntries } from '../src/lib/workoutFlow.js';
+import { parseWhatsAppChat, workoutSessionPrefix } from '../src/lib/whatsappParser.js';
 
 test('a valid existing history does not make an invalid new import valid', () => {
   const existing = { Carlos: [{ date: '04/10/26', exercise: 'Press banca', sets: 3, reps: 10, weight: 60 }] };
@@ -59,4 +60,43 @@ test('the more-weight reminder persists until a heavier completed set or dismiss
   assert.deepEqual(updateMoreWeightReminders(reminders, workout, []), {});
   exercise.moreWeightNextTime = true;
   assert.deepEqual(updateMoreWeightReminders(reminders, workout, completed(65)), { [key]: 65 });
+});
+
+test('routine session links survive parsing and match by ID across identical names', () => {
+  const prefix = '[26/11/2026, 12:00] Carlos:';
+  const entries = parseWhatsAppChat([
+    `${prefix} ### Día 1 ###`,
+    `${prefix} ${workoutSessionPrefix} {"routineId":"r1","sessionId":"s1"}`,
+    `${prefix} GYM_TRACKER_EXERCISE: Press banca`,
+    `${prefix} 1 x 10 x 60`,
+    `${prefix} ### Día 1 ###`,
+    `${prefix} GYM_TRACKER_EXERCISE: Sentadilla`,
+    `${prefix} 1 x 10 x 80`,
+  ].join('\n')).Carlos;
+  const first = { id: 's1', name: 'Día 1' };
+  const second = { id: 's2', name: 'Día 1' };
+  const routines = [{ id: 'r1', sessions: [first] }, { id: 'r2', sessions: [second] }];
+  assert.equal(entries.length, 2);
+  assert.equal(entries[1].routineId, undefined);
+  assert.equal(getLastRoutineSessionEntry(entries, routines, 'r1', { ...first, name: 'Torso' }), entries[0]);
+  assert.equal(getLastRoutineSessionEntry(entries, routines, 'r2', second), undefined);
+  assert.equal(getLastRoutineSessionEntry(entries, [routines[1]], 'r2', second), entries[1]);
+  assert.equal(workoutFromEntries([entries[0]], 'Carlos').sessionId, 's1');
+});
+
+test('marking a set complete requires whole reps and a finite positive weight', () => {
+  assert.equal(canCompleteSet({ actualReps: '2.5', weight: '60' }), false);
+  assert.equal(canCompleteSet({ actualReps: '0', weight: '60' }), false);
+  assert.equal(canCompleteSet({ actualReps: '10', weight: 'Infinity' }), false);
+  assert.equal(canCompleteSet({ actualReps: '10', weight: '62.5' }), true);
+});
+
+test('dismissing a reminder keeps its original target when the exercise is renamed', () => {
+  const original = moreWeightReminderKey('Carlos', 'Press banca');
+  const renamed = moreWeightReminderKey('Carlos', 'Press inclinado');
+  const reminders = { [original]: 60, [renamed]: 50 };
+  const workout = { user: 'Carlos', exercises: [
+    { exercise: 'Press inclinado', dismissMoreWeightReminder: [original] },
+  ] };
+  assert.deepEqual(updateMoreWeightReminders(reminders, workout, []), { [renamed]: 50 });
 });

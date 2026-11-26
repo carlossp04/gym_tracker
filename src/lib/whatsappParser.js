@@ -22,6 +22,7 @@ const ignoredContentPhrases = [
 ];
 
 const manualExercisePrefix = 'GYM_TRACKER_EXERCISE:';
+export const workoutSessionPrefix = 'GYM_TRACKER_SESSION:';
 
 export function normalizeChatText(text) {
   return text.replace(/^\uFEFF/, '').replace(/\r\n/g, '\n');
@@ -34,6 +35,7 @@ export function parseWhatsAppChat(text) {
   let currentUser = null;
   let currentDayLabel = null;
   let lastExerciseName = null;
+  let sessionLink = null;
 
   const headerRegex = /^\[?(\d{1,2}[/.-]\d{1,2}(?:[/.-]\d{2,4})?),?\s*(\d{1,2}:\d{2}(?::\d{2})?)?.*?[\]-]\s*(.*?):/;
   const dayRegex = /^###\s*(.+?)\s*###$/;
@@ -56,6 +58,7 @@ export function parseWhatsAppChat(text) {
         if (!users[rawUser]) users[rawUser] = [];
         if (currentUser !== rawUser || currentDate !== nextDate) {
           currentDayLabel = null;
+          sessionLink = null;
           lastExerciseName = null;
         }
         currentUser = rawUser;
@@ -73,7 +76,19 @@ export function parseWhatsAppChat(text) {
     const dayMatch = line.match(dayRegex);
     if (dayMatch) {
       currentDayLabel = dayMatch[1];
+      sessionLink = null;
       lastExerciseName = null;
+      return;
+    }
+
+    if (line.startsWith(workoutSessionPrefix)) {
+      sessionLink = null;
+      try {
+        const link = JSON.parse(line.slice(workoutSessionPrefix.length));
+        if (typeof link?.routineId === 'string' && link.routineId && typeof link.sessionId === 'string' && link.sessionId) {
+          sessionLink = { routineId: link.routineId, sessionId: link.sessionId };
+        }
+      } catch { /* Ignore malformed session metadata. */ }
       return;
     }
 
@@ -94,6 +109,7 @@ export function parseWhatsAppChat(text) {
         users[currentUser].push({
           id: buildEntryId(currentUser, currentDate, exerciseName, entryIndex),
           date: currentDate,
+          ...sessionLink,
           dayLabel: currentDayLabel || 'Entrenamiento',
           exercise: exerciseName,
           sets,

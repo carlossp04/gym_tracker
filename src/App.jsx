@@ -14,7 +14,7 @@ import TrainingEditModal from './features/training/TrainingEditModal';
 import TrainingInputPanel from './features/training/TrainingInputPanel';
 import TrainingRecordsTab from './features/training/TrainingRecordsTab';
 import TodayTab from './features/training/TodayTab';
-import { inspectTrainingImport, routineFromEntries, todayInputValue, updateMoreWeightReminders, workoutFromEntries } from './lib/workoutFlow';
+import { canCompleteSet, inspectTrainingImport, routineFromEntries, todayInputValue, updateMoreWeightReminders, workoutFromEntries } from './lib/workoutFlow';
 import ActiveWorkoutPanel from './features/routines/ActiveWorkoutPanel';
 import RoutinesTab from './features/routines/RoutinesTab';
 import {
@@ -54,7 +54,7 @@ import {
   unlockEncryptedVault,
   unlockEncryptedVaultWithKey,
 } from './lib/secureStorage';
-import { normalizeChatText, parseWhatsAppChat, validateParsedData } from './lib/whatsappParser';
+import { workoutSessionPrefix, normalizeChatText, parseWhatsAppChat, validateParsedData } from './lib/whatsappParser';
 
 const ALL_USERS_OPTION = 'Todos los usuarios';
 
@@ -127,6 +127,12 @@ export default function GymTracker() {
   );
   const processedData = useMemo(() => applyExerciseAliases(editedData, aliases), [editedData, aliases]);
   const availableUsers = useMemo(() => getAvailableUsers(processedData), [processedData]);
+  const trainingProfile = uiDrafts.profile ?? (selectedUser === ALL_USERS_OPTION ? '' : selectedUser);
+  const trainingProfiles = [...new Set([
+    ...availableUsers,
+    ...(uiDrafts.trainingProfiles || []),
+    trainingProfile,
+  ].filter((name) => name?.trim()))];
   const progressUserOptions = useMemo(() => [ALL_USERS_OPTION, ...availableUsers], [availableUsers]);
   const allUniqueExercises = useMemo(() => getAllUniqueExercises(processedData), [processedData]);
   const trainingEntries = useMemo(() => getEditableTrainingEntries(processedData), [processedData]);
@@ -538,6 +544,34 @@ export default function GymTracker() {
     setSaveMessage('Cambios pendientes de guardar…');
   };
 
+  const selectTrainingProfile = (name) => {
+    if (conflictRef.current) return;
+    if (trainingProfile && !availableUsers.includes(trainingProfile)) {
+      changeDraft('trainingProfiles', [...new Set([...(uiDrafts.trainingProfiles || []), trainingProfile])]);
+    }
+    changeDraft('profile', name);
+    setSelectedUser(name);
+  };
+
+  const createTrainingProfile = (name) => {
+    if (conflictRef.current) return 'Resuelve el conflicto de guardado antes de crear un perfil.';
+    if (!name) return 'Escribe un nombre para el perfil.';
+    if (name.includes(':')) return 'El nombre del perfil no puede contener dos puntos.';
+    const normalizedName = name.toLocaleLowerCase('es');
+    if ([ALL_USERS_OPTION, ...trainingProfiles].some((profile) => profile.toLocaleLowerCase('es') === normalizedName)) {
+      return 'Ese nombre ya está en uso. Elige otro o selecciona el perfil existente.';
+    }
+
+    changeDraft('trainingProfiles', [...new Set([
+      ...(uiDrafts.trainingProfiles || []),
+      ...(trainingProfile && !availableUsers.includes(trainingProfile) ? [trainingProfile] : []),
+      name,
+    ])]);
+    changeDraft('profile', name);
+    setSelectedUser(name);
+    return '';
+  };
+
   const changeWorkout = (workout) => {
     if (conflictRef.current) return;
     setActiveWorkout(workout);
@@ -701,9 +735,15 @@ export default function GymTracker() {
 
   const finishActiveWorkout = async () => {
     if (!activeWorkout) return false;
+    if (activeWorkout.exercises.some((exercise) => exercise.sets.some((set) => set.completed && !canCompleteSet(set)))) {
+      setSaveStatus('error');
+      setSaveMessage('Corrige las repeticiones o el peso de las series marcadas antes de finalizar.');
+      return false;
+    }
+
     const completedEntries = activeWorkout.exercises.flatMap((exerciseItem) =>
       exerciseItem.sets
-        .filter((set) => set.completed && Number(set.actualReps) > 0 && Number(set.weight) > 0)
+        .filter((set) => set.completed)
         .map((set) => ({
           exercise: exerciseItem.exercise,
           sets: 1,
@@ -722,6 +762,8 @@ export default function GymTracker() {
       user: activeWorkout.user,
       date: activeWorkout.date,
       dayLabel: activeWorkout.sessionName,
+      routineId: activeWorkout.routineId,
+      sessionId: activeWorkout.sessionId,
       entries: completedEntries,
     });
     const nextMoreWeightReminders = updateMoreWeightReminders(moreWeightReminders, activeWorkout, completedEntries);
@@ -1152,9 +1194,10 @@ export default function GymTracker() {
 
         {activeTab === 'today' && (
           <TodayTab
-            user={uiDrafts.profile ?? (selectedUser === ALL_USERS_OPTION ? '' : selectedUser)}
-            users={availableUsers}
-            onUserChange={(user) => { changeDraft('profile', user); setSelectedUser(user); }}
+            user={trainingProfile}
+            users={trainingProfiles}
+            onUserChange={selectTrainingProfile}
+            onCreateProfile={createTrainingProfile}
             activeWorkout={activeWorkout}
             routines={routines}
             entries={trainingEntries}
@@ -1205,11 +1248,13 @@ export default function GymTracker() {
             <TrainingInputPanel
               drafts={uiDrafts}
               onDraftChange={changeDraft}
-              profile={uiDrafts.profile ?? (selectedUser === ALL_USERS_OPTION ? '' : selectedUser)}
+              profile={trainingProfile}
+              onUserChange={selectTrainingProfile}
+              onCreateProfile={createTrainingProfile}
               importPreview={inspectTrainingImport(newTrainingText, parsedData)}
               onCreateRoutine={() => setActiveTab('routines')}
               newTrainingText={newTrainingText}
-              availableUsers={availableUsers}
+              availableUsers={trainingProfiles}
               exerciseOptions={allUniqueExercises}
               routines={routines}
               saveStatus={saveStatus}
@@ -1228,8 +1273,9 @@ export default function GymTracker() {
           <RoutinesTab
             drafts={uiDrafts}
             onDraftChange={changeDraft}
-            onStartSession={(routineId, sessionId, sessionOverride) => startTemplateWorkout({ routineId, sessionId, sessionOverride, user: uiDrafts.profile ?? selectedUser, date: todayInputValue() })}
-            profile={uiDrafts.profile ?? selectedUser}
+            onStartSession={(routineId, sessionId, sessionOverride) => startTemplateWorkout({ routineId, sessionId, sessionOverride, user: uiDrafts.profile ?? (selectedUser === ALL_USERS_OPTION ? '' : selectedUser), date: todayInputValue() })}
+            onChooseProfile={() => setActiveTab('today')}
+            profile={uiDrafts.profile ?? (selectedUser === ALL_USERS_OPTION ? '' : selectedUser)}
             canEdit={canEdit}
             routines={routines}
             exerciseOptions={allUniqueExercises}
@@ -1418,12 +1464,16 @@ function getRememberedKeyId(vaultId, remoteUserId) {
   return remoteUserId ? `${remoteUserId}:${vaultId}` : vaultId;
 }
 
-function buildManualWorkoutText({ user, date, dayLabel, entries }) {
+function buildManualWorkoutText({ user, date, dayLabel, entries, routineId, sessionId }) {
   const [year, month, day] = date.split('-');
   const chatDate = `${day}/${month}/${year}`;
   const timestamp = '12:00';
   const prefix = `[${chatDate}, ${timestamp}] ${user}:`;
   const lines = [`${prefix} ### ${dayLabel || 'Entrenamiento manual'} ###`];
+  if (routineId && sessionId) {
+    lines.push(`${prefix} ${workoutSessionPrefix} ${JSON.stringify({ routineId, sessionId })}`);
+  }
+
 
   entries.forEach((entry) => {
     lines.push(`${prefix} GYM_TRACKER_EXERCISE: ${entry.exercise}`);
