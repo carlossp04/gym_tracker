@@ -14,7 +14,7 @@ export default function AppHeader({ onReset, onNavigate, onExport, onImport }) {
           </h1>
         </div>
         <div className="flex items-center gap-2">
-          <details className="relative"><summary className="list-none cursor-pointer flex items-center gap-2 text-sm p-2 rounded-lg hover:bg-slate-800"><Settings size={18} /> Opciones</summary><div className="absolute right-0 top-full mt-3 w-64 bg-slate-900 border border-slate-700 rounded-xl p-2 shadow-xl z-40">
+          <details className="relative"><summary className="list-none cursor-pointer flex min-h-11 items-center gap-2 px-3 py-2 text-sm rounded-lg hover:bg-slate-800"><Settings size={18} /> Opciones</summary><div className="absolute right-0 top-full mt-3 w-64 bg-slate-900 border border-slate-700 rounded-xl p-2 shadow-xl z-40">
             <button type="button" onClick={(event) => { onNavigate('exercises'); event.currentTarget.closest('details').open = false; }} className="w-full text-left p-3 text-sm hover:bg-slate-800 rounded-lg">Gestionar ejercicios</button>
             <button type="button" onClick={(event) => { onNavigate('aiResume'); event.currentTarget.closest('details').open = false; }} className="w-full text-left p-3 text-sm hover:bg-slate-800 rounded-lg">Exportar resumen para IA</button>
             <button type="button" onClick={onExport} className="w-full text-left p-3 text-sm hover:bg-slate-800 rounded-lg">Descargar copia de seguridad</button>
@@ -22,9 +22,9 @@ export default function AppHeader({ onReset, onNavigate, onExport, onImport }) {
           </div></details>
           <button
             onClick={onReset}
-            className="text-xs font-bold bg-[#E65F57] hover:bg-[#d44b43] text-white py-2 px-4 rounded-lg transition-all shadow-lg shadow-red-900/20 flex items-center gap-2"
+            className="min-h-11 text-sm font-bold bg-[#E65F57] hover:bg-[#d44b43] text-white px-3 py-2 rounded-lg transition-all shadow-lg shadow-red-900/20 flex items-center gap-2"
           >
-            <Lock size={14} />
+            <Lock size={18} />
             Bloquear
           </button>
         </div>

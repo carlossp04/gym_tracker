@@ -243,7 +243,7 @@ function SessionEditor({ routine, session, routines, exerciseOptions, isSaving, 
       </div>
 
       {error && <p className="text-sm text-red-300 bg-red-500/10 border border-red-500/30 rounded-xl p-3">{error}</p>}
-      <div className="flex flex-wrap justify-end gap-3"><button type="button" onClick={saveSession} disabled={isSaving || exercises.length === 0} className={secondaryButtonClasses}><Save size={17} /> Guardar sesión</button><button type="button" onClick={async () => { if (await saveSession()) await onStartSession(routine.id, session.id, { ...session, name: name.trim(), exercises }); }} disabled={isSaving || exercises.length === 0 || !profile?.trim()} className={primaryButtonClasses}>Guardar y entrenar ahora →</button></div>
+      <div className="grid gap-3 sm:flex sm:justify-end"><button type="button" onClick={saveSession} disabled={isSaving || exercises.length === 0} className={secondaryButtonClasses}><Save size={17} /> Guardar sesión</button><button type="button" onClick={async () => { if (await saveSession()) await onStartSession(routine.id, session.id, { ...session, name: name.trim(), exercises }); }} disabled={isSaving || exercises.length === 0 || !profile?.trim()} className={primaryButtonClasses}>Guardar y entrenar ahora →</button></div>
       {!profile?.trim() && <p className="text-sm text-amber-300">Indica tu nombre en Hoy para empezar esta sesión.</p>}
     </div>
   );
@@ -266,8 +266,8 @@ function updateRoutine(routines, routineId, updater) {
 
 const inputClasses = 'h-[44px] w-full bg-slate-950 border border-slate-700 rounded-xl px-3 text-sm text-white placeholder:text-slate-600 focus:outline-none focus:border-fuchsia-400/60';
 const labelClasses = 'block text-[10px] font-black uppercase tracking-wider text-slate-500 mb-2';
-const primaryButtonClasses = 'h-[44px] px-4 bg-fuchsia-500 hover:bg-fuchsia-400 disabled:bg-slate-800 disabled:text-slate-600 text-white rounded-xl font-black flex items-center justify-center gap-2 whitespace-nowrap';
-const secondaryButtonClasses = 'h-[44px] px-4 bg-slate-800 hover:bg-slate-700 disabled:text-slate-600 text-slate-200 rounded-xl font-bold flex items-center justify-center gap-2 whitespace-nowrap';
-const dangerButtonClasses = 'h-[44px] px-4 bg-red-500/10 hover:bg-red-500/20 text-red-300 rounded-xl font-bold flex items-center justify-center gap-2 whitespace-nowrap';
+const primaryButtonClasses = 'min-h-11 px-4 py-2 bg-fuchsia-500 hover:bg-fuchsia-400 disabled:bg-slate-800 disabled:text-slate-600 text-white rounded-xl font-black flex items-center justify-center gap-2 whitespace-nowrap';
+const secondaryButtonClasses = 'min-h-11 px-4 py-2 bg-slate-800 hover:bg-slate-700 disabled:text-slate-600 text-slate-200 rounded-xl font-bold flex items-center justify-center gap-2 whitespace-nowrap';
+const dangerButtonClasses = 'min-h-11 px-4 py-2 bg-red-500/10 hover:bg-red-500/20 text-red-300 rounded-xl font-bold flex items-center justify-center gap-2 whitespace-nowrap';
 const iconButtonClasses = 'p-2 rounded-lg bg-slate-800 text-slate-400 hover:text-white disabled:opacity-30';
 const compactInputClasses = 'h-10 w-full min-w-0 bg-slate-950 border border-slate-700 rounded-lg px-3 text-sm text-white focus:outline-none focus:border-fuchsia-400/60';

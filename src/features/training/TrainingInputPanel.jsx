@@ -284,7 +284,7 @@ function PasteTrainingForm({ value, isSaving, onChange, onSave, preview }) {
 
 function ModeButton({ active, icon, label, onClick }) {
   const Icon = icon;
-  return <button type="button" onClick={onClick} className={`px-4 py-2.5 rounded-lg text-sm font-bold flex items-center justify-center gap-2 ${active ? 'bg-emerald-500 text-slate-950' : 'text-slate-400 hover:text-white'}`}><Icon size={16} /> {label}</button>;
+  return <button type="button" onClick={onClick} className={`grid min-w-0 grid-rows-[1rem_1fr] justify-items-center gap-1 px-0.5 py-2 rounded-lg text-xs leading-tight text-center font-bold sm:flex sm:items-center sm:justify-center sm:gap-2 sm:px-4 sm:py-2.5 sm:text-sm ${active ? 'bg-emerald-500 text-slate-950' : 'text-slate-400 hover:text-white'}`}><Icon size={16} className="shrink-0" /><span className="flex min-h-[2lh] min-w-0 items-center justify-center [overflow-wrap:anywhere] sm:min-h-0">{label}</span></button>;
 }
 
 function Field({ label, icon, children }) {
