@@ -1,27 +1,16 @@
-import { Check, ChevronDown, CircleStop, Dumbbell, Ellipsis, Pause, Pencil, Play, Plus, Save, SkipForward, Timer, Trash2, X } from 'lucide-react';
-import { useEffect, useState } from 'react';
+import { Check, ChevronDown, CircleStop, Dumbbell, Pause, Pencil, Play, Plus, Save, Settings2, SkipForward, Timer, Trash2, X } from 'lucide-react';
+import { useEffect, useRef, useState } from 'react';
 import { canCompleteSet, isValidSetReps, moreWeightReminderKey } from '../../lib/workoutFlow';
 
 export default function ActiveWorkoutPanel({ workout, moreWeightReminders, restSeconds, onRestSecondsChange, saveStatus, saveMessage, onWorkoutChange, onSaveProgress, onFinish, onCancel }) {
   const [showFinish, setShowFinish] = useState(false);
-  const [isCustomRest, setIsCustomRest] = useState(() => !restPresets.some(([seconds]) => seconds === restSeconds));
+  const [isDiscarding, setIsDiscarding] = useState(false);
+  const discardDialog = useRef(null);
   const allSets = workout.exercises.flatMap((exercise) => exercise.sets);
   const completedSets = allSets.filter((set) => set.completed).length;
   const completion = allSets.length > 0 ? Math.round((completedSets / allSets.length) * 100) : 0;
   const rest = workout.restTimer;
   const changeRest = (restTimer) => onWorkoutChange({ ...workout, restTimer });
-  const setRestDuration = (seconds) => {
-    onRestSecondsChange(seconds);
-    if (seconds === 0 && rest) changeRest(null);
-  };
-
-  const saveCustomRest = (event) => {
-    event.preventDefault();
-    const { minutes, seconds } = event.currentTarget.elements;
-    if (!minutes.checkValidity() || !seconds.checkValidity()) return;
-    setRestDuration(minutes.valueAsNumber * 60 + seconds.valueAsNumber);
-    event.currentTarget.closest('details').open = false;
-  };
 
   const updateSet = (exerciseId, setId, patch, completedAt) => {
     const current = allSets.find((set) => set.id === setId);
@@ -55,6 +44,16 @@ export default function ActiveWorkoutPanel({ workout, moreWeightReminders, restS
     onWorkoutChange({ ...workout, exercises: workout.exercises.filter((exercise) => exercise.id !== exerciseId) });
   };
 
+  const confirmDiscard = async () => {
+    if (isDiscarding || saveStatus === 'saving') return;
+    setIsDiscarding(true);
+    try {
+      if (await onCancel()) discardDialog.current?.close();
+    } finally {
+      setIsDiscarding(false);
+    }
+  };
+
   return (
     <div className="space-y-5 animate-in fade-in slide-in-from-bottom-4 duration-500">
       <section className="bg-slate-900 border border-slate-800 rounded-3xl shadow-xl">
@@ -65,38 +64,6 @@ export default function ActiveWorkoutPanel({ workout, moreWeightReminders, restS
               <h2 className="text-2xl font-black text-white mt-1">{workout.sessionName}</h2>
               <p className="text-sm text-slate-400 mt-1">{workout.user} · {formatDate(workout.date)}</p>
             </div>
-            <details className="relative shrink-0">
-              <summary aria-label="Opciones de la sesión" className="grid size-11 cursor-pointer list-none place-items-center rounded-xl text-slate-300 hover:bg-slate-800">
-                <Ellipsis size={20} />
-              </summary>
-              <div className="absolute right-0 top-full z-10 mt-1 w-56 rounded-xl border border-slate-700 bg-slate-950 p-1 shadow-lg">
-                <label className="grid gap-1 px-3 py-2 text-sm font-bold text-slate-300">
-                  Descanso automático
-                  <select value={isCustomRest ? 'custom' : restSeconds} onChange={(event) => {
-                    const value = event.target.value;
-                    setIsCustomRest(value === 'custom');
-                    if (value !== 'custom') setRestDuration(Number(value));
-                  }} className="min-h-11 rounded-lg border border-slate-700 bg-slate-900 px-2 text-slate-100">
-                    {restPresets.map(([seconds, label]) => <option key={seconds} value={seconds}>{label}</option>)}
-                    <option value="custom">Personalizado</option>
-                  </select>
-                </label>
-                {isCustomRest && (
-                  <form onSubmit={saveCustomRest} className="grid grid-cols-2 gap-2 px-3 pb-2 text-sm text-slate-300">
-                    <label className="grid gap-1">
-                      Minutos
-                      <input type="number" name="minutes" inputMode="numeric" min="0" max="59" step="1" required defaultValue={Math.floor(restSeconds / 60)} className={restInputClasses} />
-                    </label>
-                    <label className="grid gap-1">
-                      Segundos
-                      <input type="number" name="seconds" inputMode="numeric" min="0" max="59" step="1" required defaultValue={restSeconds % 60} className={restInputClasses} />
-                    </label>
-                    <button type="submit" className="col-span-2 min-h-11 rounded-lg bg-slate-800 px-3 font-bold text-emerald-300">Guardar duración</button>
-                  </form>
-                )}
-                <button type="button" onClick={onCancel} disabled={saveStatus === 'saving'} className="flex min-h-11 items-center gap-2 rounded-lg px-3 text-sm font-bold text-red-300 hover:bg-red-500/10 disabled:opacity-50"><X size={17} /> Descartar sesión</button>
-              </div>
-            </details>
           </div>
         </div>
 
@@ -120,6 +87,28 @@ export default function ActiveWorkoutPanel({ workout, moreWeightReminders, restS
         </div>
       </section>
 
+      <button type="button" onClick={() => discardDialog.current.showModal()} disabled={saveStatus === 'saving'} className="flex min-h-12 w-full items-center justify-center gap-2 rounded-xl bg-red-700 px-4 py-3 font-bold text-white hover:bg-red-600 disabled:opacity-50">
+        <Trash2 size={18} /> Descartar sesión
+      </button>
+
+      <dialog
+        ref={discardDialog}
+        aria-labelledby="discard-title"
+        aria-describedby="discard-description"
+        onCancel={(event) => { if (isDiscarding) event.preventDefault(); }}
+        className="m-auto w-[calc(100%-2rem)] max-w-md space-y-4 rounded-3xl border border-slate-700 bg-slate-900 p-5 text-slate-100 shadow-2xl backdrop:bg-black/80 sm:p-6"
+      >
+        <h2 id="discard-title" className="text-xl font-black">¿Descartar esta sesión?</h2>
+        <p id="discard-description" className="text-sm text-slate-300">Se eliminará la sesión en curso y se perderán todas sus series.</p>
+        {saveStatus === 'error' && <p role="alert" className="text-sm text-red-300">{saveMessage}</p>}
+        <div className="grid grid-cols-2 gap-2">
+          <button type="button" onClick={() => discardDialog.current.close()} disabled={isDiscarding} className="min-h-11 rounded-xl bg-slate-800 px-2 py-2 text-sm font-bold hover:bg-slate-700 disabled:opacity-50">Seguir entrenando</button>
+          <button type="button" onClick={confirmDiscard} disabled={isDiscarding || saveStatus === 'saving'} className="min-h-11 rounded-xl bg-red-700 px-2 py-2 text-sm font-bold text-white hover:bg-red-600 disabled:opacity-50">
+            {isDiscarding ? 'Descartando…' : 'Descartar sesión'}
+          </button>
+        </div>
+      </dialog>
+
       {saveMessage && <p className={`text-sm rounded-xl border p-3 ${saveStatus === 'error' ? 'text-red-300 bg-red-500/10 border-red-500/30' : 'text-emerald-300 bg-emerald-500/10 border-emerald-500/30'}`}>{saveMessage}</p>}
 
       <div className="sticky bottom-[calc(5rem+env(safe-area-inset-bottom))] md:bottom-4 z-20 grid grid-cols-[minmax(0,1fr)_auto] items-center gap-2 rounded-2xl border border-slate-700 bg-slate-900/95 px-3 py-2 shadow-2xl backdrop-blur">
@@ -128,7 +117,10 @@ export default function ActiveWorkoutPanel({ workout, moreWeightReminders, restS
           <div className="mt-1 h-1.5 max-w-64 overflow-hidden rounded-full bg-slate-950"><div className="h-full bg-emerald-500 transition-all" style={{ width: `${completion}%` }} /></div>
         </div>
         <button type="button" onClick={() => setShowFinish(true)} disabled={completedSets === 0} className="col-start-2 row-start-1 min-h-11 px-3 py-2 rounded-xl text-sm font-black bg-emerald-500 hover:bg-emerald-400 disabled:bg-slate-800 disabled:text-slate-600 text-slate-950 flex items-center justify-center gap-2"><CircleStop size={17} /> Finalizar</button>
-        {restSeconds > 0 && rest && <RestTimer key={rest.endsAt ?? `paused-${rest.setId}`} rest={rest} onChange={changeRest} />}
+        <div className="col-span-2 flex min-w-0 items-center gap-2 border-t border-slate-800 pt-2">
+          {rest && <RestTimer key={rest.endsAt ?? `paused-${rest.setId}`} rest={rest} onChange={changeRest} />}
+          <RestSettings restSeconds={restSeconds} onRestSecondsChange={onRestSecondsChange} hasTimer={Boolean(rest)} />
+        </div>
         {saveStatus === 'error' && <button type="button" onClick={onSaveProgress} className="col-span-2 min-h-11 px-3 py-2 rounded-xl text-sm font-bold bg-slate-800 text-white flex items-center justify-center gap-2"><Save size={17} /> Reintentar guardado</button>}
       </div>
       {showFinish && <div className="fixed inset-0 z-50 bg-black/80 flex items-center justify-center p-4" role="dialog" aria-modal="true" aria-labelledby="finish-title"><section className="bg-slate-900 border border-slate-700 rounded-3xl p-6 w-full max-w-md space-y-4"><h2 id="finish-title" className="text-xl font-black">Resumen de la sesión</h2><p className="text-slate-300">Se guardarán {completedSets} series completadas de {allSets.length}.</p>{allSets.length > completedSets && <p className="text-amber-300 text-sm">Quedan {allSets.length - completedSets} series pendientes. Puedes volver para completarlas o finalizar solo con las marcadas.</p>}<ul className="space-y-2 text-sm max-h-56 overflow-auto">{workout.exercises.map((exercise) => <li key={exercise.id} className="flex justify-between gap-3"><span>{exercise.exercise}</span><span className="whitespace-nowrap">{exercise.sets.filter((set) => set.completed).length}/{exercise.sets.length}</span></li>)}</ul><div className="flex gap-3"><button autoFocus type="button" disabled={saveStatus === 'saving'} onClick={() => setShowFinish(false)} className="flex-1 bg-slate-800 rounded-xl py-3 font-bold">Seguir entrenando</button><button type="button" disabled={saveStatus === 'saving'} onClick={async () => { if (await onFinish()) setShowFinish(false); }} className="flex-1 bg-emerald-500 text-slate-950 rounded-xl py-3 font-bold">Guardar y finalizar</button></div>{saveStatus === 'error' && <p role="alert" className="text-sm text-red-300">{saveMessage}</p>}</section></div>}
@@ -138,6 +130,61 @@ export default function ActiveWorkoutPanel({ workout, moreWeightReminders, restS
 
 const restPresets = [[0, 'Desactivado'], [30, '30 s'], [60, '1 min'], [90, '1 min 30 s'], [120, '2 min'], [180, '3 min']];
 const restInputClasses = 'min-h-11 w-full min-w-0 rounded-lg border border-slate-700 bg-slate-900 px-2 text-slate-100';
+
+function formatRestTime(seconds) {
+  return `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, '0')}`;
+}
+
+function RestSettings({ restSeconds, onRestSecondsChange, hasTimer }) {
+  const [isCustomRest, setIsCustomRest] = useState(() => !restPresets.some(([seconds]) => seconds === restSeconds));
+
+  const saveCustomRest = (event) => {
+    event.preventDefault();
+    const { minutes, seconds } = event.currentTarget.elements;
+    if (!minutes.checkValidity() || !seconds.checkValidity()) return;
+    onRestSecondsChange(minutes.valueAsNumber * 60 + seconds.valueAsNumber);
+    event.currentTarget.closest('details').open = false;
+  };
+
+  return (
+    <details className={`relative ${hasTimer ? 'shrink-0' : 'min-w-0 flex-1'}`}>
+      <summary aria-label={hasTimer ? 'Configurar temporizador de descanso' : undefined} title="Temporizador de descanso" className={`flex min-h-11 cursor-pointer list-none items-center gap-2 rounded-lg bg-slate-800 text-sm font-bold text-slate-200 hover:bg-slate-700 ${hasTimer ? 'w-11 justify-center' : 'px-3'}`}>
+        {hasTimer ? <Settings2 size={17} /> : <>
+          <Timer size={17} className="shrink-0 text-emerald-300" />
+          {restSeconds > 0 ? `Descanso · ${formatRestTime(restSeconds)}` : 'Descanso desactivado'}
+          <ChevronDown size={16} className="ml-auto shrink-0" />
+        </>}
+      </summary>
+      <div className="absolute bottom-full right-0 z-10 mb-2 max-h-[45dvh] w-56 overflow-y-auto rounded-xl border border-slate-700 bg-slate-950 p-1 shadow-lg">
+        <p className="px-3 pt-2 text-xs text-slate-400">Se aplica al marcar la próxima serie.</p>
+        <label className="grid gap-1 px-3 py-2 text-sm font-bold text-slate-300">
+          Descanso automático
+          <select value={isCustomRest ? 'custom' : restSeconds} onChange={(event) => {
+            const value = event.target.value;
+            setIsCustomRest(value === 'custom');
+            if (value !== 'custom') onRestSecondsChange(Number(value));
+          }} className="min-h-11 rounded-lg border border-slate-700 bg-slate-900 px-2 text-slate-100">
+            {restPresets.map(([seconds, label]) => <option key={seconds} value={seconds}>{label}</option>)}
+            <option value="custom">Personalizado</option>
+          </select>
+        </label>
+        {isCustomRest && (
+          <form onSubmit={saveCustomRest} className="grid grid-cols-2 gap-2 px-3 pb-2 text-sm text-slate-300">
+            <label className="grid gap-1">
+              Minutos
+              <input type="number" name="minutes" inputMode="numeric" min="0" max="59" step="1" required defaultValue={Math.floor(restSeconds / 60)} className={restInputClasses} />
+            </label>
+            <label className="grid gap-1">
+              Segundos
+              <input type="number" name="seconds" inputMode="numeric" min="0" max="59" step="1" required defaultValue={restSeconds % 60} className={restInputClasses} />
+            </label>
+            <button type="submit" className="col-span-2 min-h-11 rounded-lg bg-slate-800 px-3 font-bold text-emerald-300">Guardar duración</button>
+          </form>
+        )}
+      </div>
+    </details>
+  );
+}
 
 function RestTimer({ rest, onChange }) {
   const { endsAt, remainingMs, setId } = rest;
@@ -161,11 +208,11 @@ function RestTimer({ rest, onChange }) {
   }
 
   return (
-    <div className="col-span-2 flex min-w-0 items-center gap-2 border-t border-slate-800 pt-2">
+    <>
       <Timer size={17} className="shrink-0 text-emerald-300" />
       <div className="min-w-0 flex-1 text-sm text-slate-300">
         {finished ? <span role="status">Descanso terminado</span> : (
-          <span>Descanso <strong role="timer" className="ml-1 tabular-nums text-emerald-300">{Math.floor(seconds / 60)}:{String(seconds % 60).padStart(2, '0')}</strong>{paused && <span className="ml-1 text-xs">En pausa</span>}</span>
+          <span>Descanso <strong role="timer" className="ml-1 tabular-nums text-emerald-300">{formatRestTime(seconds)}</strong>{paused && <span className="ml-1 text-xs">En pausa</span>}</span>
         )}
       </div>
       {!finished && (
@@ -176,7 +223,7 @@ function RestTimer({ rest, onChange }) {
       <button type="button" onClick={() => onChange(null)} aria-label={finished ? 'Cerrar aviso de descanso' : 'Saltar descanso'} title={finished ? 'Cerrar aviso de descanso' : 'Saltar descanso'} className="grid size-11 shrink-0 place-items-center rounded-lg bg-slate-800 text-slate-200">
         {finished ? <X size={17} /> : <SkipForward size={17} />}
       </button>
-    </div>
+    </>
   );
 }
 

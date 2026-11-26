@@ -783,10 +783,11 @@ export default function GymTracker() {
   };
 
   const cancelActiveWorkout = async () => {
-    if (!activeWorkout || !window.confirm('¿Descartar este entrenamiento activo? No se guardarán sus series.')) return false;
+    if (!activeWorkout) return false;
     try {
       await persistPayload(trainingText, aliases, entryEdits, deletedEntryIds, routines, null);
       setActiveWorkout(null);
+      setActiveTab('today');
       setSaveMessage('Entrenamiento activo descartado.');
       return true;
     } catch {
@@ -1264,6 +1265,7 @@ export default function GymTracker() {
               onAppendTraining={appendTraining}
               onAddManualWorkout={appendManualWorkout}
               onStartTemplateWorkout={startTemplateWorkout}
+              onBack={() => setActiveTab('today')}
               onExportEncrypted={exportVault}
               onImportEncrypted={importVault}
             />

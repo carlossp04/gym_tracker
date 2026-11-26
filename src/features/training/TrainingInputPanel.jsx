@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { CalendarDays, CheckCircle2, ClipboardPaste, Copy, Dumbbell, LayoutTemplate, Play, Plus, Save, Trash2, XCircle } from 'lucide-react';
+import { ArrowLeft, CalendarDays, CheckCircle2, ClipboardPaste, Copy, Dumbbell, LayoutTemplate, Play, Plus, Save, Trash2, XCircle } from 'lucide-react';
 import TrainingProfilePicker from './TrainingProfilePicker';
 import useDraftField from '../../lib/useDraftField';
 
@@ -18,6 +18,7 @@ export default function TrainingInputPanel({
   onAppendTraining,
   onAddManualWorkout,
   onStartTemplateWorkout,
+  onBack,
   drafts, onDraftChange, profile: user, importPreview, onCreateRoutine, onUserChange, onCreateProfile,
 }) {
   const [inputMode, setInputMode] = useDraftField(drafts, onDraftChange, 'inputMode', () => routines.length > 0 ? TEMPLATE_MODE : MANUAL_MODE);
@@ -87,7 +88,10 @@ export default function TrainingInputPanel({
   return (
     <div className="space-y-6">
       <section className="bg-slate-900 border border-slate-800 rounded-3xl shadow-xl overflow-hidden">
-        <div className="p-5 border-b border-slate-800 flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+        <div className="space-y-3 border-b border-slate-800 p-5">
+          <button type="button" onClick={onBack} className="inline-flex min-h-11 items-center gap-2 rounded-lg pr-3 text-sm font-bold text-emerald-300 hover:text-emerald-200">
+            <ArrowLeft size={17} /> Volver
+          </button>
           <div>
             <h2 className="text-lg font-bold text-white flex items-center gap-2"><Plus className="text-emerald-400" /> Añadir entrenamiento</h2>
             <p className="text-sm text-slate-400 mt-1">Crea el entrenamiento con el formulario o pega un bloque exportado de WhatsApp.</p>
