@@ -1,7 +1,8 @@
 import { Check, CircleStop, Dumbbell, Pencil, Plus, Save, Trash2, X } from 'lucide-react';
 import { useState } from 'react';
+import { moreWeightReminderKey } from '../../lib/workoutFlow';
 
-export default function ActiveWorkoutPanel({ workout, saveStatus, saveMessage, onWorkoutChange, onSaveProgress, onFinish, onCancel }) {
+export default function ActiveWorkoutPanel({ workout, moreWeightReminders, saveStatus, saveMessage, onWorkoutChange, onSaveProgress, onFinish, onCancel }) {
   const [showFinish, setShowFinish] = useState(false);
   const allSets = workout.exercises.flatMap((exercise) => exercise.sets);
   const completedSets = allSets.filter((set) => set.completed).length;
@@ -56,6 +57,7 @@ export default function ActiveWorkoutPanel({ workout, saveStatus, saveMessage, o
               key={exercise.id}
               exercise={exercise}
               index={index}
+              reminderWeight={moreWeightReminders[moreWeightReminderKey(workout.user, exercise.exercise)]}
               onUpdateSet={(setId, patch) => updateSet(exercise.id, setId, patch)}
               onUpdateExercise={(updater) => updateExercise(exercise.id, updater)}
               onRemove={() => removeExercise(exercise.id)}
@@ -77,7 +79,7 @@ export default function ActiveWorkoutPanel({ workout, saveStatus, saveMessage, o
   );
 }
 
-function ExerciseCard({ exercise, index, onUpdateSet, onUpdateExercise, onRemove }) {
+function ExerciseCard({ exercise, index, reminderWeight, onUpdateSet, onUpdateExercise, onRemove }) {
   const [draftName, setDraftName] = useState(null);
   const completed = exercise.sets.filter((set) => set.completed).length;
   const saveName = (event) => {
@@ -130,31 +132,41 @@ function ExerciseCard({ exercise, index, onUpdateSet, onUpdateExercise, onRemove
       <div className="px-4 py-4 border-b border-slate-800 flex flex-col lg:flex-row lg:items-center gap-3">
         <div className="min-w-0 flex-1">
           <p className="text-xs text-slate-400 font-black">EJERCICIO {index + 1}</p>
-          {draftName === null ? (
-            <div className="flex items-center gap-1">
-              <h3 className="min-w-0 break-words text-lg font-black text-white">{exercise.exercise}</h3>
-              <button type="button" aria-label={`Editar nombre de ${exercise.exercise}`} title="Editar nombre" onClick={() => setDraftName(exercise.exercise)} className="grid size-11 shrink-0 place-items-center rounded-lg text-slate-400 hover:bg-slate-800 hover:text-white">
-                <Pencil size={15} />
-              </button>
-            </div>
-          ) : (
-            <form className="grid grid-cols-[minmax(0,1fr)_2.75rem_2.75rem] items-center gap-1" onSubmit={saveName} onKeyDown={(event) => {
-              if (event.key === 'Escape') setDraftName(null);
-            }}>
-              <input autoFocus type="text" aria-label="Nombre del ejercicio" value={draftName} onChange={(event) => setDraftName(event.target.value)} className={setInputClasses} />
-              <button type="submit" disabled={!draftName.trim()} aria-label="Guardar nombre" title="Guardar nombre" className="grid size-11 place-items-center rounded-lg bg-slate-800 text-emerald-300 disabled:opacity-40"><Check size={18} /></button>
-              <button type="button" onClick={() => setDraftName(null)} aria-label="Cancelar edición del nombre" title="Cancelar" className="grid size-11 place-items-center rounded-lg text-slate-400 hover:bg-slate-800"><X size={18} /></button>
-            </form>
-          )}
+          <div className="flex items-center gap-3">
+            {draftName === null ? (
+              <div className="flex min-w-0 flex-1 items-center gap-1">
+                <h3 className="min-w-0 break-words text-lg font-black text-white">{exercise.exercise}</h3>
+                <button type="button" aria-label={`Editar nombre de ${exercise.exercise}`} title="Editar nombre" onClick={() => setDraftName(exercise.exercise)} className="grid size-11 shrink-0 place-items-center rounded-lg text-slate-400 hover:bg-slate-800 hover:text-white">
+                  <Pencil size={15} />
+                </button>
+              </div>
+            ) : (
+              <form className="grid grid-cols-[minmax(0,1fr)_2.75rem_2.75rem] min-w-0 flex-1 items-center gap-1" onSubmit={saveName} onKeyDown={(event) => {
+                if (event.key === 'Escape') setDraftName(null);
+              }}>
+                <input autoFocus type="text" aria-label="Nombre del ejercicio" value={draftName} onChange={(event) => setDraftName(event.target.value)} className={`${setInputClasses} ${neutralInputColors}`} />
+                <button type="submit" disabled={!draftName.trim()} aria-label="Guardar nombre" title="Guardar nombre" className="grid size-11 place-items-center rounded-lg bg-slate-800 text-emerald-300 disabled:opacity-40"><Check size={18} /></button>
+                <button type="button" onClick={() => setDraftName(null)} aria-label="Cancelar edición del nombre" title="Cancelar" className="grid size-11 place-items-center rounded-lg text-slate-400 hover:bg-slate-800"><X size={18} /></button>
+              </form>
+            )}
+            <button type="button" onClick={onRemove} aria-label="Omitir ejercicio" title="Omitir ejercicio" className="grid size-11 shrink-0 place-items-center rounded-lg text-slate-500 hover:bg-red-500/10 hover:text-red-300">
+              <Trash2 size={17} />
+            </button>
+          </div>
           {exercise.notes && <p className="text-xs text-amber-300 mt-1">{exercise.notes}</p>}
           {exercise.previousWeight != null && <p className="text-xs text-slate-400 mt-1">Último peso registrado: {exercise.previousWeight} kg</p>}
+          {reminderWeight != null && !exercise.dismissMoreWeightReminder && (
+            <div className="mt-1 flex flex-wrap items-center gap-x-2 text-xs">
+              <p className="text-emerald-300">Pendiente: probar más peso que {reminderWeight} kg</p>
+              <button type="button" onClick={() => onUpdateExercise((current) => ({ ...current, dismissMoreWeightReminder: true }))} className="py-2 text-slate-400 underline hover:text-white">Quitar aviso</button>
+            </div>
+          )}
           <p className="text-xs text-emerald-400 mt-1">{completed}/{exercise.sets.length} series</p>
         </div>
         <div className="grid gap-2">
           <PendingSetsField label="Reps" buttonLabel="Aplicar repeticiones a pendientes" min="1" step="1" inputMode="numeric" defaultValue={exercise.sets.find((set) => Number.isInteger(Number(set.actualReps)) && Number(set.actualReps) > 0)?.actualReps ?? ''} onSubmit={(event) => applyToPending(event, 'actualReps')} />
-          <PendingSetsField label="Peso kg" buttonLabel="Aplicar peso a pendientes" min="0.1" step="0.1" inputMode="decimal" defaultValue={exercise.sets.find((set) => set.weight)?.weight || ''} onSubmit={(event) => applyToPending(event, 'weight')} />
+          <PendingSetsField label="Peso kg" inputColors={weightInputColors} buttonLabel="Aplicar peso a pendientes" min="0.1" step="0.1" inputMode="decimal" defaultValue={exercise.sets.find((set) => set.weight)?.weight || ''} onSubmit={(event) => applyToPending(event, 'weight')} />
         </div>
-        <button type="button" onClick={onRemove} className="p-2 text-slate-600 hover:text-red-300 self-end lg:self-auto" title="Omitir ejercicio"><Trash2 size={17} /></button>
       </div>
 
       <div>
@@ -165,8 +177,8 @@ function ExerciseCard({ exercise, index, onUpdateSet, onUpdateExercise, onRemove
             return (
               <div key={set.id} className={`grid grid-cols-[2rem_minmax(0,1fr)_minmax(0,1fr)_2.75rem] sm:grid-cols-[4rem_1fr_1fr_5rem] gap-x-2 gap-y-1 items-center px-3 py-3 border-t border-slate-800/70 ${set.completed ? 'bg-emerald-500/[0.06]' : ''}`}>
                 <div className="flex items-center gap-1"><span className="font-black text-white">{set.number}</span><button type="button" onClick={() => removeSet(set.id)} disabled={exercise.sets.length <= 1} className="p-1 text-slate-700 hover:text-red-300 disabled:hidden"><Trash2 size={12} /></button></div>
-                <input aria-describedby={`set-target-${set.id}`} aria-label={`Repeticiones serie ${set.number} de ${exercise.exercise}`} inputMode="numeric" type="number" min="1" step="1" value={set.actualReps} onChange={(event) => onUpdateSet(set.id, { actualReps: event.target.value })} className={setInputClasses} />
-                <input aria-label={`Peso serie ${set.number} de ${exercise.exercise}`} inputMode="decimal" type="number" min="0.1" step="0.1" value={set.weight} onChange={(event) => onUpdateSet(set.id, { weight: event.target.value })} className={setInputClasses} />
+                <input aria-describedby={`set-target-${set.id}`} aria-label={`Repeticiones serie ${set.number} de ${exercise.exercise}`} inputMode="numeric" type="number" min="1" step="1" value={set.actualReps} onChange={(event) => onUpdateSet(set.id, { actualReps: event.target.value })} className={`${setInputClasses} ${neutralInputColors}`} />
+                <input aria-label={`Peso serie ${set.number} de ${exercise.exercise}`} inputMode="decimal" type="number" min="0.1" step="0.1" value={set.weight} onChange={(event) => onUpdateSet(set.id, { weight: event.target.value })} className={`${setInputClasses} ${weightInputColors}`} />
                 <div className="flex justify-center"><button type="button" onClick={() => canComplete && onUpdateSet(set.id, { completed: !set.completed })} disabled={!canComplete} aria-pressed={set.completed} className={`w-11 h-11 rounded-xl border flex items-center justify-center transition-all ${set.completed ? 'bg-emerald-500 border-emerald-400 text-slate-950' : canComplete ? 'bg-slate-900 border-slate-700 text-slate-500 hover:border-emerald-500' : 'bg-slate-900 border-slate-800 text-slate-700 opacity-40'}`} aria-label={`Marcar serie ${set.number} de ${exercise.exercise}`}><Check size={20} strokeWidth={3} /></button></div>
                 <span id={`set-target-${set.id}`} className="col-start-2 row-start-2 text-[10px] text-slate-400">Objetivo: {set.targetReps}</span>
               </div>
@@ -175,16 +187,23 @@ function ExerciseCard({ exercise, index, onUpdateSet, onUpdateExercise, onRemove
         </div>
       </div>
       <button type="button" onClick={addSet} className="w-full border-t border-slate-800 py-3 text-sm font-bold text-slate-500 hover:text-emerald-400 hover:bg-slate-900 flex items-center justify-center gap-2"><Plus size={15} /> Añadir serie</button>
+      <label className="flex min-h-11 cursor-pointer items-center gap-2 border-t border-slate-800 px-3 py-2 text-sm text-slate-300">
+        <input type="checkbox" checked={Boolean(exercise.moreWeightNextTime)} onChange={(event) => {
+          const moreWeightNextTime = event.target.checked;
+          onUpdateExercise((current) => ({ ...current, moreWeightNextTime }));
+        }} className="size-4 shrink-0 accent-emerald-500" />
+        Más peso la siguiente vez
+      </label>
     </article>
   );
 }
 
-function PendingSetsField({ label, buttonLabel, min, step, inputMode, defaultValue, onSubmit }) {
+function PendingSetsField({ label, inputColors = neutralInputColors, buttonLabel, min, step, inputMode, defaultValue, onSubmit }) {
   return (
     <form className="grid grid-cols-[minmax(0,7rem)_minmax(0,1fr)] items-end gap-2" onSubmit={onSubmit}>
       <label className="grid gap-1 text-xs font-bold text-slate-300">
         {label}
-        <input name="valueToApply" type="number" required min={min} step={step} inputMode={inputMode} defaultValue={defaultValue} className="w-full min-w-0 min-h-11 bg-slate-900 border border-slate-700 rounded-lg px-3 text-sm font-normal text-white" />
+        <input name="valueToApply" type="number" required min={min} step={step} inputMode={inputMode} defaultValue={defaultValue} className={`w-full min-w-0 min-h-11 border rounded-lg px-3 text-sm font-normal text-white ${inputColors}`} />
       </label>
       <button type="submit" aria-label={buttonLabel} className="min-h-11 px-3 py-2 bg-slate-800 hover:bg-slate-700 rounded-lg text-xs font-black text-slate-200">Aplicar a pendientes</button>
     </form>
@@ -196,4 +215,7 @@ function formatDate(value) {
   return `${day}/${month}/${year}`;
 }
 
-const setInputClasses = 'w-full min-w-0 h-11 bg-slate-900 border border-slate-700 rounded-lg px-2 text-white focus:outline-none focus:border-emerald-500';
+const setInputClasses = 'w-full min-w-0 h-11 border rounded-lg px-2 text-white focus:outline-none focus:border-emerald-500';
+
+const neutralInputColors = 'bg-slate-900 border-slate-700';
+const weightInputColors = 'bg-emerald-500/10 border-emerald-500/25';

@@ -14,7 +14,7 @@ import TrainingEditModal from './features/training/TrainingEditModal';
 import TrainingInputPanel from './features/training/TrainingInputPanel';
 import TrainingRecordsTab from './features/training/TrainingRecordsTab';
 import TodayTab from './features/training/TodayTab';
-import { inspectTrainingImport, routineFromEntries, todayInputValue, workoutFromEntries } from './lib/workoutFlow';
+import { inspectTrainingImport, routineFromEntries, todayInputValue, updateMoreWeightReminders, workoutFromEntries } from './lib/workoutFlow';
 import ActiveWorkoutPanel from './features/routines/ActiveWorkoutPanel';
 import RoutinesTab from './features/routines/RoutinesTab';
 import {
@@ -117,6 +117,7 @@ export default function GymTracker() {
   const [recordsFocus, setRecordsFocus] = useState(null);
   const [routines, setRoutines] = useState([]);
   const [activeWorkout, setActiveWorkout] = useState(null);
+  const [moreWeightReminders, setMoreWeightReminders] = useState({});
   const canEdit = true;
   const remoteUser = remoteSession?.user || null;
 
@@ -168,6 +169,7 @@ export default function GymTracker() {
     setDeletedEntryIds(payload.deletedEntryIds || {});
     setRoutines(Array.isArray(payload.routines) ? payload.routines : []);
     setActiveWorkout(payload.activeWorkout?.exercises ? payload.activeWorkout : null);
+    setMoreWeightReminders(payload.moreWeightReminders || {});
     setUiDrafts(payload.uiDrafts || {});
     setNewTrainingText(payload.uiDrafts?.pasteText || '');
     setSelectedUser(payload.uiDrafts?.profile || '');
@@ -458,6 +460,7 @@ export default function GymTracker() {
     nextDeletedEntryIds = deletedEntryIds,
     nextRoutines = routines,
     nextActiveWorkout = activeWorkout,
+    nextMoreWeightReminders,
   ) => {
     const patch = {};
     // Merge only deliberate changes at execution time. An autosave queued during
@@ -468,6 +471,7 @@ export default function GymTracker() {
     if (nextDeletedEntryIds !== deletedEntryIds) patch.deletedEntryIds = nextDeletedEntryIds;
     if (nextRoutines !== routines) patch.routines = nextRoutines;
     if (nextActiveWorkout !== activeWorkout) patch.activeWorkout = nextActiveWorkout;
+    if (nextMoreWeightReminders !== undefined) patch.moreWeightReminders = nextMoreWeightReminders;
     const task = saveQueue.current.catch(() => {}).then(async () => {
       if (conflictRef.current) {
         const message = 'Conflicto entre dispositivos. Descarga una copia de tus cambios antes de volver a abrir.';
@@ -565,6 +569,7 @@ export default function GymTracker() {
     successMessage,
     expectedAddedEntries = null,
     nextActiveWorkout = activeWorkout,
+    nextMoreWeightReminders,
   ) => {
     if (!canEdit || !block.trim() || !cryptoKey) return false;
 
@@ -583,7 +588,7 @@ export default function GymTracker() {
         }
       }
 
-      await persistPayload(cleanText, aliases, entryEdits, deletedEntryIds, routines, nextActiveWorkout);
+      await persistPayload(cleanText, aliases, entryEdits, deletedEntryIds, routines, nextActiveWorkout, nextMoreWeightReminders);
       setTrainingText(cleanText);
       setParsedData(parsed);
       setSaveStatus('success');
@@ -719,13 +724,16 @@ export default function GymTracker() {
       dayLabel: activeWorkout.sessionName,
       entries: completedEntries,
     });
+    const nextMoreWeightReminders = updateMoreWeightReminders(moreWeightReminders, activeWorkout, completedEntries);
     const wasSaved = await appendTrainingBlock(
       block,
       'Entrenamiento finalizado y series completadas guardadas.',
       completedEntries.length,
       null,
+      nextMoreWeightReminders,
     );
     if (wasSaved) {
+      setMoreWeightReminders(nextMoreWeightReminders);
       setCompletedWorkout({ ...activeWorkout, completedEntries });
       setActiveWorkout(null);
     }
@@ -1161,6 +1169,7 @@ export default function GymTracker() {
           activeWorkout ? (
             <ActiveWorkoutPanel
               workout={activeWorkout}
+              moreWeightReminders={moreWeightReminders}
               saveStatus={saveStatus}
               saveMessage={saveMessage}
               onWorkoutChange={changeWorkout}

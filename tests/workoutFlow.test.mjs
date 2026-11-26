@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { inspectTrainingImport, routineFromEntries, workoutFromEntries } from '../src/lib/workoutFlow.js';
+import { inspectTrainingImport, moreWeightReminderKey, routineFromEntries, updateMoreWeightReminders, workoutFromEntries } from '../src/lib/workoutFlow.js';
 
 test('a valid existing history does not make an invalid new import valid', () => {
   const existing = { Carlos: [{ date: '04/10/26', exercise: 'Press banca', sets: 3, reps: 10, weight: 60 }] };
@@ -38,4 +38,25 @@ test('saving history as a routine keeps set counts and calls out variable repeti
   assert.equal(exercise.targetSets, 3);
   assert.equal(exercise.targetReps, 10);
   assert.match(exercise.notes, /repeticiones variables/);
+});
+
+test('the more-weight reminder persists until a heavier completed set or dismissal', () => {
+  const exercise = { exercise: 'Press banca', moreWeightNextTime: true };
+  const workout = { user: 'Carlos', exercises: [exercise] };
+  const key = moreWeightReminderKey('Carlos', ' PRESS  BANCA ');
+  const completed = (...weights) => weights.map((weight) => ({ exercise: exercise.exercise, weight }));
+
+  assert.deepEqual(updateMoreWeightReminders({}, workout, []), {});
+  const reminders = updateMoreWeightReminders({}, workout, completed(40, 60));
+  assert.deepEqual(reminders, { [key]: 60 });
+
+  exercise.moreWeightNextTime = false;
+  assert.deepEqual(updateMoreWeightReminders(reminders, workout, completed(60)), reminders);
+  assert.deepEqual(updateMoreWeightReminders(reminders, { ...workout, user: 'Ana' }, completed(65)), reminders);
+  assert.deepEqual(updateMoreWeightReminders(reminders, workout, completed(65)), {});
+
+  exercise.dismissMoreWeightReminder = true;
+  assert.deepEqual(updateMoreWeightReminders(reminders, workout, []), {});
+  exercise.moreWeightNextTime = true;
+  assert.deepEqual(updateMoreWeightReminders(reminders, workout, completed(65)), { [key]: 65 });
 });

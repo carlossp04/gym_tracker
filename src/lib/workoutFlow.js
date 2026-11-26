@@ -49,3 +49,33 @@ export function routineFromEntries(entries, name) {
     })),
   }] };
 }
+
+export function moreWeightReminderKey(user, exercise) {
+  return JSON.stringify([user.trim(), exercise.trim().replace(/\s+/g, ' ').toLocaleLowerCase('es')]);
+}
+
+export function updateMoreWeightReminders(reminders, workout, completedEntries) {
+  const next = { ...reminders };
+  const maxWeights = new Map();
+  for (const entry of completedEntries) {
+    const key = moreWeightReminderKey(workout.user, entry.exercise);
+    maxWeights.set(key, Math.max(maxWeights.get(key) ?? 0, entry.weight));
+  }
+
+  for (const [key, weight] of maxWeights) {
+    if (weight > next[key]) delete next[key];
+  }
+
+  for (const exercise of workout.exercises) {
+    if (exercise.dismissMoreWeightReminder) {
+      delete next[moreWeightReminderKey(workout.user, exercise.exercise)];
+    }
+  }
+
+  for (const exercise of workout.exercises) {
+    if (!exercise.moreWeightNextTime) continue;
+    const key = moreWeightReminderKey(workout.user, exercise.exercise);
+    if (maxWeights.has(key)) next[key] = maxWeights.get(key);
+  }
+  return next;
+}
